@@ -1,0 +1,361 @@
+﻿@using AnketOtomasyonu.Models.ViewModels
+@model LoginViewModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Giris";
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Selcuk Universitesi - Anket Otomasyonu</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #3A3A3A;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            background: #fff;
+            border-radius: 20px;
+            padding: 50px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 10px 40px rgba(0,0,0,.35);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+
+            .login-header h1 {
+                font-size: 26px;
+                color: #3A3A3A;
+                font-weight: 700;
+                margin-bottom: 10px;
+            }
+
+            .login-header p {
+                color: #777;
+                font-size: 14px;
+            }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+            .form-group label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 8px;
+                color: #3A3A3A;
+            }
+
+            .form-group input {
+                width: 100%;
+                padding: 14px 15px;
+                border-radius: 12px;
+                border: 2px solid #ddd;
+                font-size: 15px;
+                transition: border-color .3s;
+            }
+
+                .form-group input:focus {
+                    outline: none;
+                    border-color: #F9BC00;
+                }
+
+        /* CAPTCHA KUTUSU */
+        .captcha-box {
+            background: #f8f9fa;
+            border: 2px solid #eee;
+            border-radius: 14px;
+            padding: 16px 18px;
+            margin-bottom: 20px;
+        }
+
+            .captcha-box label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 10px;
+                color: #3A3A3A;
+                font-size: 14px;
+            }
+
+        .captcha-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .captcha-question {
+            background: #3A3A3A;
+            color: #F9BC00;
+            font-size: 20px;
+            font-weight: 800;
+            padding: 10px 20px;
+            border-radius: 10px;
+            letter-spacing: 2px;
+            min-width: 110px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .captcha-equals {
+            color: #999;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .captcha-input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 2px solid #ddd;
+            font-size: 18px;
+            font-weight: 700;
+            text-align: center;
+            transition: border-color .3s;
+            max-width: 90px;
+        }
+
+            .captcha-input:focus {
+                outline: none;
+                border-color: #F9BC00;
+            }
+
+        /* Süre çubuğu */
+        .captcha-timer-bar {
+            height: 4px;
+            background: #eee;
+            border-radius: 2px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .captcha-timer-fill {
+            height: 100%;
+            background: #F9BC00;
+            border-radius: 2px;
+            width: 100%;
+            transition: width 1s linear, background 0.3s;
+        }
+
+        .captcha-timer-text {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 5px;
+            text-align: right;
+        }
+
+        .captcha-error {
+            display: none;
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 8px;
+            font-weight: 600;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 16px;
+            background: #F9BC00;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #3A3A3A;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all .3s;
+        }
+
+            .login-btn:hover {
+                background: #E0AB00;
+                transform: scale(1.02);
+            }
+
+            .login-btn:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+                transform: none;
+            }
+
+        .info-text {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 13px;
+            color: #888;
+        }
+
+        .alert {
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .field-validation-error {
+            color: #dc3545;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>Selcuk Universitesi</h1>
+            <p>Anket Otomasyonu - Giris</p>
+        </div>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="alert alert-danger text-center">@ViewBag.Error</div>
+        }
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success text-center">@TempData["Success"]</div>
+        }
+
+        <form asp-controller="Auth" asp-action="Login" method="post" id="loginForm">
+            @Html.AntiForgeryToken()
+
+            <div class="form-group">
+                <label asp-for="Username">Kullanici Adi</label>
+                <input asp-for="Username" class="form-control"
+                       placeholder="Kullanici adinizi giriniz"
+                       autocomplete="username" />
+                <span asp-validation-for="Username" class="field-validation-error"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Password">Sifre</label>
+                <input asp-for="Password" class="form-control"
+                       placeholder="Sifrenizi giriniz"
+                       autocomplete="current-password" />
+                <span asp-validation-for="Password" class="field-validation-error"></span>
+            </div>
+
+            <!-- CAPTCHA -->
+            <div class="captcha-box">
+                <label>🔒 Güvenlik Doğrulaması</label>
+                <div class="captcha-row">
+                    <div class="captcha-question" id="captchaQuestion">? + ?</div>
+                    <span class="captcha-equals">=</span>
+                    <input type="number"
+                           id="captchaAnswer"
+                           class="captcha-input"
+                           placeholder="?"
+                           min="0" max="18"
+                           autocomplete="off" />
+                </div>
+                <input type="hidden" id="captchaResult" name="CaptchaResult" />
+                <div class="captcha-timer-bar">
+                    <div class="captcha-timer-fill" id="timerFill"></div>
+                </div>
+                <div class="captcha-timer-text" id="timerText">120 saniye</div>
+                <div class="captcha-error" id="captchaError">
+                    ❌ Hatalı cevap veya süre doldu. Yeni soru üretildi.
+                </div>
+            </div>
+
+            <button type="submit" class="login-btn" id="loginBtn">
+                Giris Yap
+            </button>
+        </form>
+
+        <div class="info-text">
+            Giris yapan kullanici bilgileri gizli tutulur.<br />
+            Anketler anonim olarak degerlendirilir.
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        var captchaTimeout;
+        var timerInterval;
+        var totalSeconds = 120; // 2 dakika
+        var remaining;
+
+        function generateCaptcha() {
+            // Eski zamanlayıcıları temizle
+            clearTimeout(captchaTimeout);
+            clearInterval(timerInterval);
+
+            // Tek basamaklı sayılar: 1-9
+            var a = Math.floor(Math.random() * 9) + 1;
+            var b = Math.floor(Math.random() * 9) + 1;
+            var result = a + b;
+
+            document.getElementById('captchaQuestion').textContent = a + ' + ' + b;
+            document.getElementById('captchaResult').value = btoa(result.toString());
+            document.getElementById('captchaAnswer').value = '';
+            document.getElementById('captchaError').style.display = 'none';
+
+            // Süre çubuğu başlat
+            remaining = totalSeconds;
+            document.getElementById('timerFill').style.width = '100%';
+            document.getElementById('timerFill').style.background = '#F9BC00';
+            document.getElementById('timerText').textContent = remaining + ' saniye';
+
+            timerInterval = setInterval(function () {
+                remaining--;
+                var pct = (remaining / totalSeconds) * 100;
+                document.getElementById('timerFill').style.width = pct + '%';
+                document.getElementById('timerText').textContent = remaining + ' saniye';
+
+                // Son 30 saniyede kırmızıya dön
+                if (remaining <= 30) {
+                    document.getElementById('timerFill').style.background = '#dc3545';
+                    document.getElementById('timerText').style.color = '#dc3545';
+                }
+
+                if (remaining <= 0) {
+                    clearInterval(timerInterval);
+                    // Süre doldu — yeni captcha üret
+                    document.getElementById('captchaError').textContent = '⏰ Süre doldu. Yeni soru üretildi.';
+                    document.getElementById('captchaError').style.display = 'block';
+                    generateCaptcha();
+                }
+            }, 1000);
+        }
+
+        // Sayfa açılınca captcha oluştur
+        generateCaptcha();
+
+        // Form submit kontrolü
+        document.getElementById('loginForm').addEventListener('submit', function (e) {
+            var userAnswer = parseInt(document.getElementById('captchaAnswer').value);
+            var correct    = parseInt(atob(document.getElementById('captchaResult').value));
+
+            if (isNaN(userAnswer) || userAnswer !== correct) {
+                e.preventDefault();
+                document.getElementById('captchaError').textContent = '❌ Hatalı cevap. Yeni soru üretildi.';
+                document.getElementById('captchaError').style.display = 'block';
+                generateCaptcha();
+                document.getElementById('captchaAnswer').focus();
+                return;
+            }
+
+            // Doğru — butonu disable et
+            clearInterval(timerInterval);
+            var btn = document.getElementById('loginBtn');
+            btn.disabled    = true;
+            btn.textContent = 'Giris yapiliyor...';
+        });
+    </script>
+</body>
+</html>

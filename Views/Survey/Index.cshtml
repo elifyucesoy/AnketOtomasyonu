@@ -1,0 +1,49 @@
+﻿@using AnketOtomasyonu.Models.ViewModels
+@using AnketOtomasyonu.Models.Entities
+@model IEnumerable<Survey>
+@{
+    ViewData["Title"] = "Anketlerim";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-clipboard2-data me-2"></i>Anketlerim</h2>
+    <a asp-controller="Admin" asp-action="CreateSurvey" class="btn btn-su">
+        <i class="bi bi-plus-circle me-1"></i>Yeni Anket
+    </a>
+</div>
+
+@if (Model.Any())
+{
+    <div class="row g-4">
+        @foreach (var s in Model)
+        {
+            var badge = s.Status == SurveyStatus.Active ? "bg-success" : s.Status == SurveyStatus.Draft ? "bg-warning text-dark" : "bg-secondary";
+            var label = s.Status == SurveyStatus.Active ? "Aktif" : s.Status == SurveyStatus.Draft ? "Taslak" : "Pasif";
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <span class="badge @badge">@label</span>
+                        @if (s.IsAnonymous)
+                        {
+                            <span class="badge bg-dark"><i class="bi bi-shield-check"></i> Anonim</span>
+                        }
+                        <h5 class="mt-2 fw-bold">@s.Title</h5>
+                        <small class="text-muted">@(s.Questions?.Count ?? 0) soru | @(s.Responses?.Count ?? 0) yanit</small>
+                    </div>
+                    <div class="card-footer bg-white border-0">
+                        <a asp-action="Detail" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye me-1"></i>Detay
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-inbox" style="font-size:3rem;"></i>
+        <p class="mt-2">Henuz anket olusturmadiniz.</p>
+    </div>
+}

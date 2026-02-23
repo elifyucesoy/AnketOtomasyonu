@@ -1,0 +1,167 @@
+﻿@using AnketOtomasyonu.Models.ViewModels
+@model AdminDashboardViewModel
+@{
+    ViewData["Title"] = "Yönetim Paneli";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-speedometer2 me-2"></i>Yönetim Paneli</h2>
+    <a asp-action="CreateSurvey" class="btn btn-su">
+        <i class="bi bi-plus-circle me-1"></i>Yeni Anket
+    </a>
+</div>
+
+<!-- İSTATİSTİK KARTLARI -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-4">
+            <i class="bi bi-clipboard2-data" style="font-size:2rem;color:#F9BC00;"></i>
+            <h3 class="fw-bold mt-2 mb-0">@Model.TotalSurveys</h3>
+            <p class="text-muted small mb-0">Toplam Anket</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-4">
+            <i class="bi bi-check-circle text-success" style="font-size:2rem;"></i>
+            <h3 class="fw-bold mt-2 mb-0">@Model.ActiveSurveys</h3>
+            <p class="text-muted small mb-0">Aktif</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-4">
+            <i class="bi bi-pencil-square text-warning" style="font-size:2rem;"></i>
+            <h3 class="fw-bold mt-2 mb-0">@Model.DraftSurveys</h3>
+            <p class="text-muted small mb-0">Taslak</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-4">
+            <i class="bi bi-chat-square-text text-info" style="font-size:2rem;"></i>
+            <h3 class="fw-bold mt-2 mb-0">@Model.TotalResponses</h3>
+            <p class="text-muted small mb-0">Toplam Yanıt</p>
+        </div>
+    </div>
+</div>
+
+<!-- ANKET LİSTESİ -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Anketler</h5>
+    </div>
+    <div class="card-body p-0">
+        @if (Model.RecentSurveys.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Anket Adı</th>
+                            <th>Durum</th>
+                            <th>Soru</th>
+                            <th>Yanıt</th>
+                            <th>Oluşturan</th>
+                            <th>Tarih</th>
+                            <th class="text-end">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model.RecentSurveys)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@s.Title</td>
+                                <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
+                                <td>@s.QuestionCount</td>
+                                <td>@s.ResponseCount</td>
+                                <td class="text-muted small">@s.CreatedByName</td>
+                                <td class="text-muted small">@s.CreatedAt.ToString("dd.MM.yyyy")</td>
+                                <td class="text-end">
+                                    <div class="d-flex gap-1 justify-content-end">
+
+                                        <!-- DETAY -->
+                                        <a asp-controller="Survey"
+                                           asp-action="Detail"
+                                           asp-route-id="@s.Id"
+                                           class="btn btn-sm btn-outline-primary"
+                                           title="Detay">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+
+                                        <!-- SONUÇLAR -->
+                                        @if (s.ResponseCount > 0)
+                                        {
+                                            <a asp-action="Results"
+                                               asp-route-id="@s.Id"
+                                               class="btn btn-sm btn-outline-info"
+                                               title="Sonuçlar">
+                                                <i class="bi bi-bar-chart"></i>
+                                            </a>
+                                        }
+
+                                        <!-- YAYINLA -->
+                                        @if (s.Status == "Taslak" || s.Status == "Pasif")
+                                        {
+                                            <form asp-action="Publish"
+                                                  asp-route-id="@s.Id"
+                                                  method="post"
+                                                  style="display:inline;">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-success"
+                                                        title="Yayınla"
+                                                        onclick="return confirm('Anket yayınlansın mı?')">
+                                                    <i class="bi bi-broadcast"></i>
+                                                </button>
+                                            </form>
+                                        }
+
+                                        <!-- KAPAT -->
+                                        @if (s.Status == "Aktif")
+                                        {
+                                            <form asp-action="Close"
+                                                  asp-route-id="@s.Id"
+                                                  method="post"
+                                                  style="display:inline;">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit"
+                                                        class="btn btn-sm btn-warning"
+                                                        title="Kapat"
+                                                        onclick="return confirm('Anket kapatılsın mı?')">
+                                                    <i class="bi bi-stop-circle"></i>
+                                                </button>
+                                            </form>
+                                        }
+
+                                        <!-- SİL -->
+                                        <form asp-action="Delete"
+                                              asp-route-id="@s.Id"
+                                              method="post"
+                                              style="display:inline;">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    title="Sil"
+                                                    onclick="return confirm('Anket silinsin mi? Bu işlem geri alınamaz!')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox" style="font-size:3rem;"></i>
+                <p class="mt-2">Henüz anket yok.</p>
+                <a asp-action="CreateSurvey" class="btn btn-su mt-2">
+                    <i class="bi bi-plus-circle me-1"></i>İlk Anketi Oluştur
+                </a>
+            </div>
+        }
+    </div>
+</div>

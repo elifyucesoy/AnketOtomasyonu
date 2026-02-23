@@ -1,0 +1,248 @@
+﻿@using AnketOtomasyonu.Models.Entities
+@model AnketOtomasyonu.Models.ViewModels.SurveyFillViewModel
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body text-center py-4"
+                 style="background:linear-gradient(135deg,#3A3A3A,#2a2a2a);border-radius:8px 8px 0 0;color:#fff;">
+                <h3 class="fw-bold mb-1">@Model.Title</h3>
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <p class="mb-0 opacity-75">@Model.Description</p>
+                }
+            </div>
+            @if (Model.IsAnonymous)
+            {
+                <div class="alert alert-info m-3 mb-0">
+                    <i class="bi bi-shield-check me-2"></i>
+                    Bu anket <strong>anonimdir</strong>. Kimlik bilgileriniz kaydedilmez.
+                </div>
+            }
+        </div>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger">⚠️ @TempData["Error"]</div>
+        }
+
+        <form asp-controller="SurveyResponse" asp-action="Submit" method="post" id="fillForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="SurveyId" value="@Model.SurveyId" />
+
+            @{
+                var questions = Model.Questions.OrderBy(x => x.OrderIndex).ToList();
+            }
+
+            @for (int i = 0; i < questions.Count; i++)
+            {
+                var q = questions[i];
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">
+                            @(i + 1). @q.Text
+                            @if (q.IsRequired)
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                            else
+                            {
+                                <small class="text-muted fw-normal">(İsteğe bağlı)</small>
+                            }
+                        </h6>
+
+                        <input type="hidden" name="Answers[@i].QuestionId" value="@q.QuestionId" />
+
+                        @if (q.Type == QuestionType.Likert)
+                        {
+                            <div class="d-flex flex-wrap gap-3">
+                                @foreach (var o in q.Options.OrderBy(x => x.OrderIndex))
+                                {
+                                    <div class="form-check">
+                                        <input class="form-check-input likert-radio"
+                                               type="radio"
+                                               name="Answers[@i].SelectedOptionId"
+                                               value="@o.Id"
+                                               id="q@(q.QuestionId)_o@(o.Id)"
+                                               data-required="@q.IsRequired.ToString().ToLower()" />
+                                        <label class="form-check-label" for="q@(q.QuestionId)_o@(o.Id)">
+                                            @o.Text
+                                            <small class="text-muted">
+                                                @(o.Value.HasValue ? $"({o.Value})" : "")
+                                            </small>
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (q.Type == QuestionType.MultipleChoice)
+                        {
+                            @foreach (var o in q.Options.OrderBy(x => x.OrderIndex))
+                            {
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input"
+                                           type="radio"
+                                           name="Answers[@i].SelectedOptionId"
+                                           value="@o.Id"
+                                           id="q@(q.QuestionId)_o@(o.Id)"
+                                           data-required="@q.IsRequired.ToString().ToLower()" />
+                                    <label class="form-check-label" for="q@(q.QuestionId)_o@(o.Id)">
+                                        @o.Text
+                                    </label>
+                                </div>
+                            }
+                        }
+                        else if (q.Type == QuestionType.OpenEnded)
+                        {
+                            <textarea name="Answers[@i].OpenEndedAnswer"
+                              class="form-control"
+                              rows="4"
+                              placeholder="Cevabınızı yazınız..."
+                              data-required="@q.IsRequired.ToString().ToLower()"></textarea>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- CAPTCHA -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">🔒 Güvenlik Doğrulaması</h6>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <div id="captchaQuestion"
+                             style="background:#3A3A3A;color:#F9BC00;font-size:20px;
+                                    font-weight:800;padding:10px 24px;border-radius:10px;
+                                    letter-spacing:2px;min-width:110px;text-align:center;">
+                            ? + ?
+                        </div>
+                        <span style="font-size:20px;color:#999;font-weight:700;">=</span>
+                        <input type="number"
+                               id="captchaAnswer"
+                               class="form-control"
+                               style="max-width:90px;text-align:center;font-size:18px;font-weight:700;"
+                               placeholder="?"
+                               min="0" max="18"
+                               autocomplete="off" />
+                        <div>
+                            <div class="progress" style="width:160px;height:6px;border-radius:3px;">
+                                <div id="timerFill"
+                                     class="progress-bar"
+                                     style="width:100%;background:#F9BC00;transition:width 1s linear;">
+                                </div>
+                            </div>
+                            <small id="timerText" class="text-muted">120 saniye</small>
+                        </div>
+                    </div>
+                    <input type="hidden" id="captchaResult" />
+                    <div id="captchaError"
+                         class="text-danger small mt-2"
+                         style="display:none;">
+                        ❌ Hatalı cevap. Yeni soru üretildi.
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mb-5">
+                <button type="submit" class="btn btn-su btn-lg" id="submitBtn">
+                    <i class="bi bi-send me-1"></i>Anketi Gönder
+                </button>
+                <a asp-controller="Home" asp-action="Index"
+                   class="btn btn-outline-secondary btn-lg">İptal</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        var captchaCorrect = 0;
+        var totalSec = 120, remaining, timerInterval;
+
+        function generateCaptcha() {
+            clearInterval(timerInterval);
+            var a = Math.floor(Math.random() * 9) + 1;
+            var b = Math.floor(Math.random() * 9) + 1;
+            captchaCorrect = a + b;
+
+            document.getElementById('captchaQuestion').textContent = a + ' + ' + b;
+            document.getElementById('captchaAnswer').value = '';
+            document.getElementById('captchaError').style.display = 'none';
+
+            remaining = totalSec;
+            var fill = document.getElementById('timerFill');
+            var txt  = document.getElementById('timerText');
+            fill.style.width = '100%';
+            fill.style.background = '#F9BC00';
+            txt.style.color = '';
+
+            timerInterval = setInterval(function () {
+                remaining--;
+                fill.style.width = (remaining / totalSec * 100) + '%';
+                txt.textContent = remaining + ' saniye';
+                if (remaining <= 30) {
+                    fill.style.background = '#dc3545';
+                    txt.style.color = '#dc3545';
+                }
+                if (remaining <= 0) {
+                    clearInterval(timerInterval);
+                    document.getElementById('captchaError').textContent = '⏰ Süre doldu. Yeni soru üretildi.';
+                    document.getElementById('captchaError').style.display = 'block';
+                    generateCaptcha();
+                }
+            }, 1000);
+        }
+
+        generateCaptcha();
+
+        document.getElementById('fillForm').addEventListener('submit', function (e) {
+
+            // 1) Zorunlu radio kontrolü
+            var radioGroups = {};
+            document.querySelectorAll('input[type="radio"][data-required="true"]').forEach(function(el) {
+                if (!radioGroups[el.name]) radioGroups[el.name] = false;
+                if (el.checked) radioGroups[el.name] = true;
+            });
+            for (var name in radioGroups) {
+                if (!radioGroups[name]) {
+                    e.preventDefault();
+                    alert('Lütfen zorunlu (*) soruları cevaplayınız.');
+                    return;
+                }
+            }
+
+            // 2) Zorunlu textarea kontrolü
+            var ok = true;
+            document.querySelectorAll('textarea[data-required="true"]').forEach(function(el) {
+                if (!el.value.trim()) {
+                    e.preventDefault();
+                    el.style.borderColor = '#dc3545';
+                    el.focus();
+                    alert('Lütfen zorunlu (*) soruları cevaplayınız.');
+                    ok = false;
+                }
+            });
+            if (!ok) return;
+
+            // 3) Captcha kontrolü
+            var userAns = parseInt(document.getElementById('captchaAnswer').value);
+            if (isNaN(userAns) || userAns !== captchaCorrect) {
+                e.preventDefault();
+                document.getElementById('captchaError').textContent = '❌ Hatalı cevap. Yeni soru üretildi.';
+                document.getElementById('captchaError').style.display = 'block';
+                generateCaptcha();
+                document.getElementById('captchaAnswer').focus();
+                return;
+            }
+
+            // Doğru — submit
+            clearInterval(timerInterval);
+            var btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Gönderiliyor...';
+        });
+    </script>
+}

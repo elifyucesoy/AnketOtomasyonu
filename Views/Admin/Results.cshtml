@@ -1,0 +1,97 @@
+﻿@using AnketOtomasyonu.Models.DTOs
+@using AnketOtomasyonu.Models.Entities
+@model SurveyResultDto
+@{
+    ViewData["Title"] = "Anket Sonuçları";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2><i class="bi bi-bar-chart me-2"></i>Sonuçlar</h2>
+        <p class="text-muted mb-0">@Model.Title</p>
+    </div>
+    <a asp-action="Dashboard" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Geri
+    </a>
+</div>
+
+<!-- ÖZET -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body text-center py-4">
+        <h1 class="display-4 fw-bold" style="color:#F9BC00;">@Model.TotalResponses</h1>
+        <p class="text-muted mb-0">Toplam Katılımcı</p>
+    </div>
+</div>
+
+@if (Model.TotalResponses == 0)
+{
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-inbox" style="font-size:3rem;"></i>
+        <p class="mt-2">Henüz yanıt yok.</p>
+    </div>
+}
+else
+{
+    @foreach (var q in Model.Questions)
+    {
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold">@q.QuestionText</h6>
+                    <span class="badge bg-secondary">@q.AnswerCount yanıt</span>
+                </div>
+            </div>
+            <div class="card-body">
+
+                @if (q.QuestionType == QuestionType.OpenEnded)
+                {
+                    <!-- AÇIK UÇLU SORULAR -->
+                    @if (q.OpenEndedAnswers.Any())
+                    {
+                        <div style="max-height:300px; overflow-y:auto;">
+                            @foreach (var ans in q.OpenEndedAnswers)
+                            {
+                                <div class="border rounded p-2 mb-2 bg-light small">
+                                    @ans
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted small mb-0">Henüz cevap yok.</p>
+                    }
+                }
+                else
+                {
+                    <!-- LİKERT / ÇOKTAN SEÇMELİ — ÇUBUK GRAFİK -->
+                    @foreach (var opt in q.OptionResults)
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="small fw-semibold">@opt.OptionText</span>
+                                <span class="small text-muted">
+                                    @opt.Count kişi (@opt.Percentage%)
+                                </span>
+                            </div>
+                            <div class="progress" style="height:22px; border-radius:8px;">
+                                <div class="progress-bar"
+                                     role="progressbar"
+                                     style="width:@opt.Percentage%; background:#F9BC00; color:#3A3A3A; font-weight:700;"
+                                     aria-valuenow="@opt.Percentage"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100">
+                                    @if (opt.Percentage > 10)
+                                    {
+                                        <span>@opt.Percentage%</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+
+            </div>
+        </div>
+    }
+}
