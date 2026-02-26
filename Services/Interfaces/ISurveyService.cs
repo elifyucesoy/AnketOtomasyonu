@@ -8,8 +8,8 @@ namespace AnketOtomasyonu.Services.Interfaces
         Task<Survey?> GetSurveyWithQuestionsAsync(int surveyId);
         Task<IEnumerable<Survey>> GetAllSurveysAsync();
         Task<IEnumerable<Survey>> GetActiveSurveysAsync();
-        Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(int creatorUserId);
-        Task<Survey> CreateSurveyAsync(SurveyCreateDto dto, int creatorUserId, string creatorName);
+        Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(string creatorUserId);
+        Task<Survey> CreateSurveyAsync(SurveyCreateDto dto, string creatorUserId, string creatorName);
         Task PublishSurveyAsync(int surveyId);
         Task CloseSurveyAsync(int surveyId);
         Task DeleteSurveyAsync(int surveyId);

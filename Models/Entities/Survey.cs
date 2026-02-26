@@ -14,7 +14,7 @@
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public SurveyStatus Status { get; set; } = SurveyStatus.Draft;
-        public int CreatedByUserId { get; set; }
+        public string CreatedByUserId { get; set; }
         public string CreatedByName { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }

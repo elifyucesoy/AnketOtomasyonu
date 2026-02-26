@@ -14,6 +14,6 @@ namespace AnketOtomasyonu.Repositories.Interfaces
         Task<IEnumerable<Survey>> GetSurveysForRoleAsync(string roleName);
 
         /// <summary>Belirli kullanıcının oluşturduğu anketleri getirir</summary>
-        Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(int userId);
+        Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(string userId);
     }
 }

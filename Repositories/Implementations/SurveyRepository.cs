@@ -36,7 +36,7 @@ namespace AnketOtomasyonu.Repositories.Implementations
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(int userId)
+        public async Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(string userId)
         {
             return await _context.Surveys
                 .Where(s => s.CreatedByUserId == userId)

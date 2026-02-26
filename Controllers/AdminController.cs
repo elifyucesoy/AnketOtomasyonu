@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnketOtomasyonu.Controllers
 {
-    [Authorize(Policy = "AnketAdmin")]
     public class AdminController : Controller
     {
         private readonly ISurveyService _surveyService;
@@ -70,7 +69,6 @@ namespace AnketOtomasyonu.Controllers
         public IActionResult CreateSurvey() => View(new SurveyCreateViewModel());
 
         [HttpPost]
-        [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateSurvey(SurveyCreateDto dto)
         {
             if (!ModelState.IsValid)
@@ -87,7 +85,7 @@ namespace AnketOtomasyonu.Controllers
             if (user == null) return RedirectToAction("Login", "Auth");
 
             await _surveyService.CreateSurveyAsync(
-                dto, user.Id, $"{user.Name} {user.Surname}");
+                dto, user.Id.ToString(), $"{user.Name} {user.Surname}");
 
             TempData["Success"] = "Anket başarıyla oluşturuldu. Yayınlamak için Yayınla butonuna tıklayın.";
             return RedirectToAction("Dashboard");

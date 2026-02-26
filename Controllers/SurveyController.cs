@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnketOtomasyonu.Controllers
 {
-    [Authorize(Policy = "AnketAdmin")]
+    //[Authorize(Policy = "AnketAdmin")]
     public class SurveyController : Controller
     {
         private readonly ISurveyService _surveyService;
@@ -27,7 +27,7 @@ namespace AnketOtomasyonu.Controllers
             if (currentUser == null)
                 return RedirectToAction("Login", "Auth");
 
-            var surveys = await _surveyService.GetSurveysByCreatorAsync(currentUser.Id);
+            var surveys = await _surveyService.GetSurveysByCreatorAsync(currentUser.Id.ToString());
             return View(surveys);
         }
 
