@@ -56,7 +56,9 @@
                     <thead class="table-light">
                         <tr>
                             <th>Anket Adı</th>
+                            <th>Tür</th>
                             <th>Durum</th>
+                            <th>Anket URL</th>
                             <th>Soru</th>
                             <th>Yanıt</th>
                             <th>Oluşturan</th>
@@ -69,7 +71,39 @@
                         {
                             <tr>
                                 <td class="fw-semibold">@s.Title</td>
+                                <td>
+                                    @if (s.IsAnonymous)
+                                    {
+                                        <span class="badge bg-info text-dark"><i class="bi bi-shield-check me-1"></i>Anonim</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary"><i class="bi bi-lock me-1"></i>Login</span>
+                                    }
+                                </td>
                                 <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
+                                <td>
+                                    @if (s.Status == "Aktif")
+                                    {
+                                        <div class="d-flex align-items-center gap-1">
+                                            <code class="small text-truncate" style="max-width:180px;display:inline-block;" id="url-text-@s.Id">/SurveyResponse/Fill/@s.Id</code>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-dark py-0 px-1"
+                                                    title="URL Kopyala"
+                                                    onclick="copySurveyLink(@s.Id, @s.IsAnonymous.ToString().ToLower(), this)">
+                                                <i class="bi bi-clipboard" style="font-size:0.75rem;"></i>
+                                            </button>
+                                        </div>
+                                        @if (!s.IsAnonymous)
+                                        {
+                                            <small class="text-muted" style="font-size:0.7rem;"><i class="bi bi-lock me-1"></i>Login gerekli</small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">-</span>
+                                    }
+                                </td>
                                 <td>@s.QuestionCount</td>
                                 <td>@s.ResponseCount</td>
                                 <td class="text-muted small">@s.CreatedByName</td>
@@ -77,13 +111,13 @@
                                 <td class="text-end">
                                     <div class="d-flex gap-1 justify-content-end">
 
-                                        <!-- ANONİM ANKET URL -->
-                                        @if (s.IsAnonymous && s.Status == "Aktif")
+                                        <!-- ANKET URL KOPYALA -->
+                                        @if (s.Status == "Aktif")
                                         {
                                             <button type="button"
-                                                    class="btn btn-sm btn-outline-secondary"
-                                                    title="Anonim Anket Linkini Kopyala"
-                                                    onclick="copyAnonLink(@s.Id, this)">
+                                                    class="btn btn-sm @(s.IsAnonymous ? "btn-outline-secondary" : "btn-outline-primary")"
+                                                    title="@(s.IsAnonymous ? "Anonim Anket Linkini Kopyala" : "Anket Linkini Kopyala (Login Gerekli)")"
+                                                    onclick="copySurveyLink(@s.Id, @s.IsAnonymous.ToString().ToLower(), this)">
                                                 <i class="bi bi-link-45deg"></i>
                                             </button>
                                         }
@@ -179,20 +213,22 @@
 
 @section Scripts {
 <script>
-    function copyAnonLink(surveyId, btn) {
+    function copySurveyLink(surveyId, isAnonymous, btn) {
         var url = window.location.origin + '/SurveyResponse/Fill/' + surveyId;
+        var label = isAnonymous ? 'Anonim anket linki' : 'Anket linki (login gerekli)';
+
         navigator.clipboard.writeText(url).then(function () {
             var orig = btn.innerHTML;
             btn.innerHTML = '<i class="bi bi-check-lg"></i>';
-            btn.classList.remove('btn-outline-secondary');
             btn.classList.add('btn-success');
+            btn.classList.remove('btn-outline-dark', 'btn-outline-secondary', 'btn-outline-primary');
             setTimeout(function () {
                 btn.innerHTML = orig;
                 btn.classList.remove('btn-success');
-                btn.classList.add('btn-outline-secondary');
+                btn.classList.add('btn-outline-dark');
             }, 1500);
         }).catch(function () {
-            prompt('Anonim anket linki (kopyalayın):', url);
+            prompt(label + ' (kopyalayın):', url);
         });
     }
 </script>
