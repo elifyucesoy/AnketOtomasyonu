@@ -168,7 +168,7 @@ namespace AnketOtomasyonu.Authorization
         public string Surname { get; set; } = "";
         public string Username { get; set; } = "";
         public string Email { get; set; } = "";
-        public int UserTypeId { get; set; } = 0;
+        public UserType UserTypeId { get; set; } = 0;
         public long TcIdentityNo { get; set; } = 0;
         public string Token { get; set; } = "";
         public DateTime TokenCreateDate { get; set; } = DateTime.Now;
@@ -194,6 +194,15 @@ namespace AnketOtomasyonu.Authorization
     {
         And = 0,
         Or = 1
+    }
+    public enum UserType
+    {
+        Employee = 0,
+        Student = 1,
+        InstituteStudent = 2,
+        GuestEmployee = 3,
+        SystemUser = 4,
+        SystemAdmin = 5,
     }
     public class AuthServicePermissionHandler : AuthorizationHandler<AuthServiceRequirement>
     {

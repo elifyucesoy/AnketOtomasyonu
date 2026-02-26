@@ -40,6 +40,7 @@ namespace AnketOtomasyonu.Controllers
                 {
                     Id = s.Id,
                     Title = s.Title,
+                    IsAnonymous =s.IsAnonymous,
                     Status = s.Status switch
                     {
                         SurveyStatus.Active => "Aktif",

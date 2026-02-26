@@ -81,7 +81,11 @@ namespace AnketOtomasyonu.Services.Implementations
             var response = new SurveyResponse
             {
                 SurveyId = dto.SurveyId,
-                UserId = survey.IsAnonymous ? Guid.NewGuid().ToString() : userId,
+                // Anonim ankette kullanıcı ID'si olarak IP adresi kaydedilir.
+                // Normal ankette login olan kullanıcının ID'si kullanılır.
+                UserId = survey.IsAnonymous
+                    ? (ipAddress ?? "anonymous")
+                    : userId,
                 SubmittedAt = DateTime.UtcNow,
                 IpAddress = ipAddress,
                 Answers = dto.Answers.Select(a => new SurveyAnswer

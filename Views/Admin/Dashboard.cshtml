@@ -77,6 +77,17 @@
                                 <td class="text-end">
                                     <div class="d-flex gap-1 justify-content-end">
 
+                                        <!-- ANONİM ANKET URL -->
+                                        @if (s.IsAnonymous && s.Status == "Aktif")
+                                        {
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                    title="Anonim Anket Linkini Kopyala"
+                                                    onclick="copyAnonLink(@s.Id, this)">
+                                                <i class="bi bi-link-45deg"></i>
+                                            </button>
+                                        }
+
                                         <!-- DETAY -->
                                         <a asp-controller="Survey"
                                            asp-action="Detail"
@@ -165,3 +176,24 @@
         }
     </div>
 </div>
+
+@section Scripts {
+<script>
+    function copyAnonLink(surveyId, btn) {
+        var url = window.location.origin + '/SurveyResponse/Fill/' + surveyId;
+        navigator.clipboard.writeText(url).then(function () {
+            var orig = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-success');
+            setTimeout(function () {
+                btn.innerHTML = orig;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-secondary');
+            }, 1500);
+        }).catch(function () {
+            prompt('Anonim anket linki (kopyalayın):', url);
+        });
+    }
+</script>
+}

@@ -48,6 +48,20 @@ namespace AnketOtomasyonu.Services.Implementations
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<Survey>> GetActiveAnonymousSurveysAsync()
+        {
+            var now = DateTime.UtcNow;
+            return await _context.Surveys
+                .Where(s => s.Status == SurveyStatus.Active
+                    && s.IsAnonymous
+                    && (s.StartDate == null || s.StartDate <= now)
+                    && (s.EndDate == null || s.EndDate >= now))
+                .Include(s => s.Questions)
+                .Include(s => s.Responses)
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+        }
+
         public async Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(string creatorUserId)
         {
             return await _context.Surveys

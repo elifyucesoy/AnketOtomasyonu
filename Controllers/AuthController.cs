@@ -26,18 +26,24 @@ namespace AnketOtomasyonu.Controllers
         }
 
         [HttpGet]
-        public IActionResult Login()
+        public IActionResult Login(string? returnUrl = null)
         {
             if (!string.IsNullOrEmpty(HttpContext.Session.GetString("AccessToken")))
+            {
+                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                    return Redirect(returnUrl);
                 return RedirectToAction("Index", "Home");
+            }
 
+            ViewBag.ReturnUrl = returnUrl;
             return View(new LoginViewModel());
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Login(LoginViewModel model)
+        public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
         {
+            ViewBag.ReturnUrl = returnUrl;
             if (!ModelState.IsValid) return View(model);
 
             try
@@ -119,6 +125,9 @@ namespace AnketOtomasyonu.Controllers
                     "Login OK — User:{Name} Id:{Id} Admin:{A}",
                     fullName, user?.Id, isAdmin);
 
+                // returnUrl varsa oraya yönlendir, yoksa ana sayfa
+                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                    return Redirect(returnUrl);
                 return RedirectToAction("Index", "Home");
             }
             catch (Exception ex)

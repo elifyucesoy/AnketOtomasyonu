@@ -146,7 +146,8 @@ builder.Services.AddAuthentication(options =>
             if (!context.Request.Path.StartsWithSegments("/api"))
             {
                 context.HandleResponse();
-                context.Response.Redirect("/Auth/Login");
+                var returnUrl = Uri.EscapeDataString(context.Request.Path + context.Request.QueryString);
+                context.Response.Redirect($"/Auth/Login?returnUrl={returnUrl}");
             }
 
             return Task.CompletedTask;
