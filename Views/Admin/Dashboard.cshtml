@@ -73,7 +73,17 @@
                         @foreach (var s in Model.RecentSurveys)
                         {
                             <tr>
-                                <td class="fw-semibold">@s.Title</td>
+                                <td class="fw-semibold">
+                                    @s.Title
+                                    @if (s.IsAnonymous)
+                                    {
+                                        <span class="badge bg-info ms-1">Anonim</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark ms-1">Login Gerekli</span>
+                                    }
+                                </td>
                                 <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
                                 <td>@s.QuestionCount</td>
                                 <td>@s.ResponseCount</td>
