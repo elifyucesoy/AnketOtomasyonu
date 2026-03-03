@@ -14,5 +14,6 @@ namespace AnketOtomasyonu.Services.Interfaces
         Task PublishSurveyAsync(int surveyId);
         Task CloseSurveyAsync(int surveyId);
         Task DeleteSurveyAsync(int surveyId);
+        Task UpdateSurveyAsync(int surveyId, SurveyCreateDto dto);
     }
 }

@@ -2,12 +2,12 @@
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AnketOtomasyonu.Controllers
 {
-    // [Authorize] sınıf düzeyinden kaldırıldı.
-    // Anonim ankette login gerekmez; normal ankette her action'da manuel kontrol yapılır.
+    [AllowAnonymous]
     public class SurveyResponseController : Controller
     {
         private readonly ISurveyService _surveyService;

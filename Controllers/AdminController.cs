@@ -112,6 +112,72 @@ namespace AnketOtomasyonu.Controllers
         }
 
         [HttpGet]
+        public async Task<IActionResult> EditSurvey(int id)
+        {
+            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+            if (survey == null)
+            {
+                TempData["Error"] = "Anket bulunamadı.";
+                return RedirectToAction("Dashboard");
+            }
+
+            var vm = new SurveyCreateViewModel
+            {
+                Title = survey.Title,
+                Description = survey.Description,
+                IsAnonymous = survey.IsAnonymous,
+                StartDate = survey.StartDate,
+                EndDate = survey.EndDate,
+            };
+
+            ViewBag.SurveyId = survey.Id;
+            ViewBag.SurveyStatus = survey.Status;
+            ViewBag.ExistingQuestions = survey.Questions
+                .OrderBy(q => q.OrderIndex)
+                .Select(q => new {
+                    text = q.Text,
+                    type = (int)q.Type,
+                    isRequired = q.IsRequired,
+                    options = q.Options
+                        .OrderBy(o => o.OrderIndex)
+                        .Select(o => new { text = o.Text.Contains(") ") ? o.Text.Substring(o.Text.IndexOf(") ") + 2) : o.Text })
+                        .ToList()
+                }).ToList();
+
+            // TargetRoles'u ayarla
+            if (!string.IsNullOrEmpty(survey.TargetRoles))
+            {
+                ViewBag.SelectedRoles = survey.TargetRoles.Split(',').ToList();
+            }
+
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditSurvey(int id, SurveyCreateDto dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                TempData["Error"] = "Lütfen zorunlu alanları doldurunuz.";
+                return RedirectToAction("EditSurvey", new { id });
+            }
+
+            await _surveyService.UpdateSurveyAsync(id, dto);
+            TempData["Success"] = "Anket başarıyla güncellendi.";
+            return RedirectToAction("Dashboard");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Republish(int id)
+        {
+            await _surveyService.PublishSurveyAsync(id);
+            TempData["Success"] = "Anket tekrar yayınlandı!";
+            return RedirectToAction("Dashboard");
+        }
+
+        [HttpGet]
         public async Task<IActionResult> Results(int id)
         {
             var results = await _responseService.GetSurveyResultsAsync(id);

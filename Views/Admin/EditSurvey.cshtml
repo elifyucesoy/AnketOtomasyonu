@@ -1,0 +1,215 @@
+@using AnketOtomasyonu.Models.ViewModels
+@using AnketOtomasyonu.Models.Entities
+@model SurveyCreateViewModel
+@{
+    ViewData["Title"] = "Anketi Düzenle";
+    var surveyId = (int)ViewBag.SurveyId;
+    var surveyStatus = (SurveyStatus)ViewBag.SurveyStatus;
+    var existingQuestions = ViewBag.ExistingQuestions as dynamic;
+    var selectedRoles = ViewBag.SelectedRoles as List<string> ?? new List<string>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-pencil-square me-2"></i>Anketi Düzenle</h2>
+    <div class="d-flex gap-2">
+        @if (surveyStatus == SurveyStatus.Closed || surveyStatus == SurveyStatus.Inactive || surveyStatus == SurveyStatus.Draft)
+        {
+            <form asp-action="Republish" asp-route-id="@surveyId" method="post" style="display:inline;">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-success"
+                        onclick="return confirm('Anket tekrar yayınlansın mı?')">
+                    <i class="bi bi-broadcast me-1"></i>Tekrar Yayınla
+                </button>
+            </form>
+        }
+        <a asp-action="Dashboard" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </a>
+    </div>
+</div>
+
+@if (surveyStatus == SurveyStatus.Active)
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        Bu anket şu an <strong>aktif</strong>. Değişiklik yaparsanız anket güncellenecektir.
+    </div>
+}
+
+<form asp-action="EditSurvey" asp-route-id="@surveyId" method="post" id="editSurveyForm">
+    @Html.AntiForgeryToken()
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Anket Bilgileri</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="Title" class="form-label fw-semibold"></label>
+                    <input asp-for="Title" class="form-control" placeholder="Örnek: Öğrenci Memnuniyet Anketi" />
+                    <span asp-validation-for="Title" class="text-danger"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Description" class="form-label fw-semibold"></label>
+                    <textarea asp-for="Description" class="form-control" rows="3" placeholder="Anketin amacını kısaca açıklayınız..."></textarea>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="StartDate" class="form-label fw-semibold"></label>
+                    <input asp-for="StartDate" class="form-control" type="date" id="startDate" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="EndDate" class="form-label fw-semibold"></label>
+                    <input asp-for="EndDate" class="form-control" type="date" id="endDate" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Hedef Roller</label><br />
+                    @foreach (var role in Model.AvailableRoles)
+                    {
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="TargetRoles"
+                                   value="@role" id="role_@role"
+                                   @(selectedRoles.Contains(role) ? "checked" : "") />
+                            <label class="form-check-label" for="role_@role">@role</label>
+                        </div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check mt-4">
+                        <input asp-for="IsAnonymous" class="form-check-input" />
+                        <label asp-for="IsAnonymous" class="form-check-label fw-semibold">Anonim Anket</label>
+                        <small class="d-block text-muted">İşaretlenirse katılımcı bilgileri admin dahil kimseye gösterilmez</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-question-circle me-2"></i>Sorular</h5>
+            <button type="button" class="btn btn-sm btn-admin" onclick="addQuestion()">
+                <i class="bi bi-plus me-1"></i>Soru Ekle
+            </button>
+        </div>
+        <div class="card-body" id="questionsContainer">
+            <div class="text-center text-muted py-4" id="noQuestions" style="display:none;">
+                <i class="bi bi-question-circle" style="font-size:2rem;"></i>
+                <p class="mt-2">Henüz soru eklenmedi.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mb-5">
+        <button type="submit" class="btn btn-admin btn-lg">
+            <i class="bi bi-check-circle me-1"></i>Değişiklikleri Kaydet
+        </button>
+        <a asp-action="Dashboard" class="btn btn-outline-secondary btn-lg">İptal</a>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        let qIndex = 0;
+        var optCounters = {};
+
+        function addQuestion(text, type, isRequired, options) {
+            var noQ = document.getElementById('noQuestions');
+            if (noQ) noQ.style.display = 'none';
+
+            text = text || '';
+            type = type || 1;
+            isRequired = (isRequired !== undefined) ? isRequired : true;
+            options = options || [];
+
+            var checkedAttr = isRequired ? 'checked' : '';
+
+            var html = '<div class="card mb-3 question-card" data-index="' + qIndex + '">' +
+                '<div class="card-header bg-light d-flex justify-content-between align-items-center">' +
+                '<strong>Soru ' + (qIndex + 1) + '</strong>' +
+                '<button type="button" class="btn btn-sm btn-outline-danger" onclick="removeQuestion(this)"><i class="bi bi-trash"></i></button>' +
+                '</div><div class="card-body"><div class="row g-3">' +
+                '<div class="col-md-8"><input type="text" name="Questions[' + qIndex + '].Text" class="form-control" placeholder="Soruyu yazınız..." value="' + escapeHtml(text) + '" required /></div>' +
+                '<div class="col-md-4"><select name="Questions[' + qIndex + '].Type" class="form-select" onchange="onTypeChange(this,' + qIndex + ')">' +
+                '<option value="1"' + (type == 1 ? ' selected' : '') + '>Likert (5li Ölçek)</option>' +
+                '<option value="2"' + (type == 2 ? ' selected' : '') + '>Çoktan Seçmeli</option>' +
+                '<option value="3"' + (type == 3 ? ' selected' : '') + '>Açık Uçlu</option></select></div>' +
+                '<div class="col-12"><div class="form-check">' +
+                '<input type="hidden" name="Questions[' + qIndex + '].IsRequired" value="false" />' +
+                '<input type="checkbox" name="Questions[' + qIndex + '].IsRequired" value="true" class="form-check-input" ' + checkedAttr + ' />' +
+                '<label class="form-check-label">Zorunlu soru</label></div></div>' +
+                '<input type="hidden" name="Questions[' + qIndex + '].OrderIndex" value="' + qIndex + '" />' +
+                '</div><div class="mt-3 options-area" id="opts_' + qIndex + '" style="display:' + (type == 2 ? 'block' : 'none') + ';">' +
+                '<label class="form-label fw-semibold">Seçenekler</label>' +
+                '<div class="options-list"></div>' +
+                '<button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addOption(' + qIndex + ')"><i class="bi bi-plus me-1"></i>Seçenek Ekle</button>' +
+                '</div></div></div>';
+
+            document.getElementById('questionsContainer').insertAdjacentHTML('beforeend', html);
+
+            // Mevcut seçenekleri ekle
+            if (type == 2 && options.length > 0) {
+                optCounters[qIndex] = 0;
+                for (var k = 0; k < options.length; k++) {
+                    addOption(qIndex, options[k].text);
+                }
+            }
+
+            qIndex++;
+        }
+
+        function removeQuestion(btn) {
+            btn.closest('.question-card').remove();
+            var cards = document.querySelectorAll('.question-card');
+            if (cards.length === 0) {
+                document.getElementById('noQuestions').style.display = 'block';
+            }
+        }
+
+        function onTypeChange(select, qi) {
+            var area = document.getElementById('opts_' + qi);
+            area.style.display = (select.value === '2') ? 'block' : 'none';
+        }
+
+        function addOption(qi, text) {
+            if (!optCounters[qi]) optCounters[qi] = 0;
+            var oi = optCounters[qi];
+            text = text || '';
+            var html = '<div class="input-group mb-2">' +
+                '<input type="text" name="Questions[' + qi + '].Options[' + oi + '].Text" class="form-control" placeholder="Seçenek ' + (oi + 1) + '" value="' + escapeHtml(text) + '" required />' +
+                '<input type="hidden" name="Questions[' + qi + '].Options[' + oi + '].OrderIndex" value="' + oi + '" />' +
+                '<button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button></div>';
+            document.querySelector('#opts_' + qi + ' .options-list').insertAdjacentHTML('beforeend', html);
+            optCounters[qi]++;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // Mevcut soruları yükle
+        var existingQuestions = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(existingQuestions));
+        if (existingQuestions && existingQuestions.length > 0) {
+            for (var i = 0; i < existingQuestions.length; i++) {
+                var q = existingQuestions[i];
+                addQuestion(q.text, q.type, q.isRequired, q.options);
+            }
+        } else {
+            document.getElementById('noQuestions').style.display = 'block';
+        }
+
+        // Tarih kısıtlamaları
+        var startInput = document.getElementById('startDate');
+        var endInput = document.getElementById('endDate');
+        startInput.addEventListener('change', function () {
+            endInput.min = this.value;
+            if (endInput.value && endInput.value < this.value) {
+                endInput.value = '';
+            }
+        });
+        if (startInput.value) {
+            endInput.min = startInput.value;
+        }
+    </script>
+}

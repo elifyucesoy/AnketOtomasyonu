@@ -156,5 +156,71 @@ namespace AnketOtomasyonu.Services.Implementations
             _context.Surveys.Remove(s);
             await _context.SaveChangesAsync();
         }
+
+        public async Task UpdateSurveyAsync(int surveyId, SurveyCreateDto dto)
+        {
+            var survey = await _context.Surveys
+                .Include(s => s.Questions)
+                    .ThenInclude(q => q.Options)
+                .FirstOrDefaultAsync(s => s.Id == surveyId);
+
+            if (survey == null) return;
+
+            // Temel bilgileri güncelle
+            survey.Title = dto.Title;
+            survey.Description = dto.Description;
+            survey.IsAnonymous = dto.IsAnonymous;
+            survey.StartDate = dto.StartDate;
+            survey.EndDate = dto.EndDate;
+            survey.TargetRoles = string.Join(",", dto.TargetRoles);
+            survey.UpdatedAt = DateTime.UtcNow;
+
+            // Eski soruları ve seçenekleri sil
+            foreach (var q in survey.Questions.ToList())
+            {
+                _context.RemoveRange(q.Options);
+                _context.Remove(q);
+            }
+
+            // Yeni soruları ekle
+            int order = 1;
+            foreach (var qDto in dto.Questions)
+            {
+                var question = new Question
+                {
+                    Text = qDto.Text,
+                    Type = qDto.Type,
+                    IsRequired = qDto.IsRequired,
+                    OrderIndex = order++
+                };
+
+                if (qDto.Type == QuestionType.Likert)
+                {
+                    question.Options = new List<QuestionOption>
+                    {
+                        new() { Text = "Çok Kötü",  Value = 1, OrderIndex = 1 },
+                        new() { Text = "Kötü",       Value = 2, OrderIndex = 2 },
+                        new() { Text = "Kararsızım", Value = 3, OrderIndex = 3 },
+                        new() { Text = "İyi",        Value = 4, OrderIndex = 4 },
+                        new() { Text = "Çok İyi",    Value = 5, OrderIndex = 5 },
+                    };
+                }
+                else if (qDto.Type == QuestionType.MultipleChoice)
+                {
+                    var labels = new[] { "A", "B", "C", "D" };
+                    question.Options = qDto.Options.Take(4)
+                        .Select((o, i) => new QuestionOption
+                        {
+                            Text = $"{labels[i]}) {o.Text}",
+                            OrderIndex = i + 1
+                        }).ToList();
+                }
+
+                survey.Questions.Add(question);
+            }
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Anket güncellendi Id={Id}", surveyId);
+        }
     }
 }
