@@ -6,9 +6,14 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-speedometer2 me-2"></i>Yönetim Paneli</h2>
-    <a asp-action="CreateSurvey" class="btn btn-su">
+    <div class="d-flex gap-2">
+        <a asp-controller="Home" asp-action="Index" class="btn btn-outline-primary">
+            <i class="bi bi-eye me-1"></i>Anket Sayfasını Görüntüle
+        </a>
+        <a asp-action="CreateSurvey" class="btn btn-admin">
         <i class="bi bi-plus-circle me-1"></i>Yeni Anket
     </a>
+    </div>
 </div>
 
 <!-- İSTATİSTİK KARTLARI -->
@@ -77,13 +82,13 @@
                                 <td class="text-end">
                                     <div class="d-flex gap-1 justify-content-end">
 
-                                        <!-- ANONİM ANKET URL -->
-                                        @if (s.IsAnonymous && s.Status == "Aktif")
+                                        <!-- ANKET URL KOPYALA -->
+                                        @if (s.Status == "Aktif")
                                         {
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-secondary"
-                                                    title="Anonim Anket Linkini Kopyala"
-                                                    onclick="copyAnonLink(@s.Id, this)">
+                                                    title="Anket Linkini Kopyala"
+                                                    onclick="copySurveyLink(@s.Id, this)">
                                                 <i class="bi bi-link-45deg"></i>
                                             </button>
                                         }
@@ -179,11 +184,11 @@
 
 @section Scripts {
 <script>
-    function copyAnonLink(surveyId, btn) {
+    function copySurveyLink(surveyId, btn) {
         var url = window.location.origin + '/SurveyResponse/Fill/' + surveyId;
         navigator.clipboard.writeText(url).then(function () {
             var orig = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+            btn.innerHTML = '<i class="bi bi-check-lg text-white"></i>';
             btn.classList.remove('btn-outline-secondary');
             btn.classList.add('btn-success');
             setTimeout(function () {
@@ -192,7 +197,7 @@
                 btn.classList.add('btn-outline-secondary');
             }, 1500);
         }).catch(function () {
-            prompt('Anonim anket linki (kopyalayın):', url);
+            prompt('Anket linki (kopyalayın):', url);
         });
     }
 </script>

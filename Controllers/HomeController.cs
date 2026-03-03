@@ -1,4 +1,4 @@
-﻿using AnketOtomasyonu.Models.Entities;
+using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnketOtomasyonu.Controllers
 {
-    [Authorize]
+    [AllowAnonymous]
     public class HomeController : Controller
     {
         private readonly ISurveyService _surveyService;
@@ -24,7 +24,7 @@ namespace AnketOtomasyonu.Controllers
             {
                 UserFullName = HttpContext.Session.GetString("UserFullName"),
                 UserRole = HttpContext.Session.GetString("UserRole"),
-                IsLoggedIn = true,
+                IsLoggedIn = !string.IsNullOrEmpty(HttpContext.Session.GetString("AccessToken")),
                 Surveys = surveys.Select(s => new SurveyListItemViewModel
                 {
                     Id = s.Id,

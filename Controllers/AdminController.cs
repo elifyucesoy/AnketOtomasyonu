@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnketOtomasyonu.Controllers
 {
+    [Authorize(Policy = "AnketAdmin")]
     public class AdminController : Controller
     {
         private readonly ISurveyService _surveyService;

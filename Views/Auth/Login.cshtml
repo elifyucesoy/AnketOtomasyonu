@@ -228,7 +228,7 @@
             <div class="alert alert-success text-center">@TempData["Success"]</div>
         }
 
-        <form asp-controller="Auth" asp-action="Login" method="post" id="loginForm">
+        <form asp-controller="Auth" asp-action="Login" asp-route-returnUrl="@ViewBag.ReturnUrl" method="post" id="loginForm">
             @Html.AntiForgeryToken()
             @if (ViewBag.ReturnUrl != null)
             {

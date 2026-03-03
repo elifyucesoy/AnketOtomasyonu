@@ -1,11 +1,13 @@
 ﻿using AnketOtomasyonu.Authorization;
 using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace AnketOtomasyonu.Controllers
 {
+    [AllowAnonymous]
     public class AuthController : Controller
     {
         private readonly IHttpClientFactory _httpClientFactory;
@@ -143,7 +145,7 @@ namespace AnketOtomasyonu.Controllers
         public IActionResult Logout()
         {
             HttpContext.Session.Clear();
-            return RedirectToAction("Login");
+            return RedirectToAction("Index", "Home");
         }
 
         [HttpGet]

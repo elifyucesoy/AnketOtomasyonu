@@ -6,7 +6,7 @@ namespace AnketOtomasyonu.Models.DTOs
     {
         public string Text { get; set; } = string.Empty;
         public QuestionType Type { get; set; }
-        public bool IsRequired { get; set; } = true;
+        public bool IsRequired { get; set; }
         public int OrderIndex { get; set; }
         public List<OptionCreateDto> Options { get; set; } = new();
     }

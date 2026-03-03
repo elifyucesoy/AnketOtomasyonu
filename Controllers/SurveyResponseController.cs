@@ -88,7 +88,8 @@ namespace AnketOtomasyonu.Controllers
             else
             {
                 // ── NORMAL ANKET: login zorunlu ──
-                if (string.IsNullOrEmpty(userId) || userId == "0")
+                var accessToken = HttpContext.Session.GetString("AccessToken");
+                if (string.IsNullOrEmpty(accessToken))
                 {
                     // Login sonrası bu ankete geri dön
                     var returnUrl = Url.Action("Fill", "SurveyResponse", new { id });
@@ -157,7 +158,8 @@ namespace AnketOtomasyonu.Controllers
             {
                 // Normal ankette login zorunlu
                 var sessionUserId = HttpContext.Session.GetString("UserId");
-                if (string.IsNullOrEmpty(sessionUserId) || sessionUserId == "0")
+                var submitAccessToken = HttpContext.Session.GetString("AccessToken");
+                if (string.IsNullOrEmpty(submitAccessToken))
                 {
                     var returnUrl = Url.Action("Fill", "SurveyResponse", new { id = dto.SurveyId });
                     return RedirectToAction("Login", "Auth", new { returnUrl });
