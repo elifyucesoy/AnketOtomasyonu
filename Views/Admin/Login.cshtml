@@ -1,0 +1,87 @@
+﻿@using AnketOtomasyonu.Models.ViewModels
+@model LoginViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Girisi</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+        body {
+            background: #2c2c2c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .login-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        .login-title {
+            color: #3A3A3A;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .login-sub {
+            color: #888;
+            text-align: center;
+            margin-bottom: 28px;
+            font-size: 14px;
+        }
+
+        .btn-admin {
+            background: #3A3A3A;
+            color: #F9BC00;
+            font-weight: 600;
+            border: none;
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+            .btn-admin:hover {
+                background: #222;
+                color: #F9BC00;
+            }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h3 class="login-title">Admin Paneli</h3>
+        <p class="login-sub">Yonetici girisi yapiniz</p>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="alert alert-danger">@ViewBag.Error</div>
+        }
+
+        <form asp-controller="Admin" asp-action="Login" method="post">
+            @Html.AntiForgeryToken()
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Kullanici Adi</label>
+                <input asp-for="Username" class="form-control" placeholder="Kullanici adinizi girin" autofocus />
+            </div>
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Sifre</label>
+                <input asp-for="Password" type="password" class="form-control" placeholder="Sifrenizi girin" />
+            </div>
+            <button type="submit" class="btn btn-admin">Giris Yap</button>
+        </form>
+    </div>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

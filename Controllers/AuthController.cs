@@ -119,7 +119,7 @@ namespace AnketOtomasyonu.Controllers
 
                 // 4) Admin izni
                 var isAdmin = await _authHandler.ValidatePermissionServiceAsync(
-                    $"Bearer {accessToken}", "ANKET_API", ["ANKET_API"]);
+                    $"Bearer {accessToken}", "aANKET_API", ["ANKET_API"]);
 
                 HttpContext.Session.SetString("UserRole", isAdmin ? "Admin" : "Kullanici");
 

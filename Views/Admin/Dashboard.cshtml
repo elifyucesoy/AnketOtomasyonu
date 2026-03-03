@@ -61,7 +61,9 @@
                     <thead class="table-light">
                         <tr>
                             <th>Anket Adı</th>
+                            <th>Tür</th>
                             <th>Durum</th>
+                            <th>Anket URL</th>
                             <th>Soru</th>
                             <th>Yanıt</th>
                             <th>Oluşturan</th>
@@ -85,6 +87,28 @@
                                     }
                                 </td>
                                 <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
+                                <td>
+                                    @if (s.Status == "Aktif")
+                                    {
+                                        <div class="d-flex align-items-center gap-1">
+                                            <code class="small text-truncate" style="max-width:180px;display:inline-block;" id="url-text-@s.Id">/SurveyResponse/Fill/@s.Id</code>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-dark py-0 px-1"
+                                                    title="URL Kopyala"
+                                                    onclick="copySurveyLink(@s.Id, @s.IsAnonymous.ToString().ToLower(), this)">
+                                                <i class="bi bi-clipboard" style="font-size:0.75rem;"></i>
+                                            </button>
+                                        </div>
+                                        @if (!s.IsAnonymous)
+                                        {
+                                            <small class="text-muted" style="font-size:0.7rem;"><i class="bi bi-lock me-1"></i>Login gerekli</small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">-</span>
+                                    }
+                                </td>
                                 <td>@s.QuestionCount</td>
                                 <td>@s.ResponseCount</td>
                                 <td class="text-muted small">@s.CreatedByName</td>
@@ -210,15 +234,18 @@
 <script>
     function copySurveyLink(surveyId, btn) {
         var url = window.location.origin + '/SurveyResponse/Fill/' + surveyId;
+        var label = isAnonymous ? 'Anonim anket linki' : 'Anket linki (login gerekli)';
+
         navigator.clipboard.writeText(url).then(function () {
             var orig = btn.innerHTML;
             btn.innerHTML = '<i class="bi bi-check-lg text-white"></i>';
             btn.classList.remove('btn-outline-secondary');
             btn.classList.add('btn-success');
+            btn.classList.remove('btn-outline-dark', 'btn-outline-secondary', 'btn-outline-primary');
             setTimeout(function () {
                 btn.innerHTML = orig;
                 btn.classList.remove('btn-success');
-                btn.classList.add('btn-outline-secondary');
+                btn.classList.add('btn-outline-dark');
             }, 1500);
         }).catch(function () {
             prompt('Anket linki (kopyalayın):', url);
