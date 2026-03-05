@@ -30,11 +30,23 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public IActionResult Login(string? returnUrl = null)
         {
+            // Anket doldurma sayfasına gidiyorsa her zaman taze login iste
+            bool isSurveyFill = !string.IsNullOrEmpty(returnUrl)
+                && returnUrl.Contains("SurveyResponse/Fill", StringComparison.OrdinalIgnoreCase);
+
             if (!string.IsNullOrEmpty(HttpContext.Session.GetString("AccessToken")))
             {
-                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                    return Redirect(returnUrl);
-                return RedirectToAction("Index", "Home");
+                if (isSurveyFill)
+                {
+                    // Anket doldurmak için eski session geçersiz — temizle, login formunu göster
+                    HttpContext.Session.Clear();
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                        return Redirect(returnUrl);
+                    return RedirectToAction("Index", "Home");
+                }
             }
 
             ViewBag.ReturnUrl = returnUrl;
@@ -126,6 +138,13 @@ namespace AnketOtomasyonu.Controllers
                 _logger.LogInformation(
                     "Login OK — User:{Name} Id:{Id} Admin:{A}",
                     fullName, user?.Id, isAdmin);
+
+                // Anket doldurma sayfasına yönlendiriliyorsa tek kullanımlık bayrak set et
+                if (!string.IsNullOrEmpty(returnUrl)
+                    && returnUrl.Contains("SurveyResponse/Fill", StringComparison.OrdinalIgnoreCase))
+                {
+                    HttpContext.Session.SetString("FillAuthenticated", "true");
+                }
 
                 // returnUrl varsa oraya yönlendir, yoksa ana sayfa
                 if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))

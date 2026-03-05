@@ -1,4 +1,5 @@
-﻿using AnketOtomasyonu.Models.DTOs;
+﻿using AnketOtomasyonu.Authorization;
+using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
@@ -12,13 +13,16 @@ namespace AnketOtomasyonu.Controllers
     {
         private readonly ISurveyService _surveyService;
         private readonly ISurveyResponseService _responseService;
+        private readonly IAuthServiceHandler _authServiceHandler;
 
         public SurveyResponseController(
             ISurveyService surveyService,
-            ISurveyResponseService responseService)
+            ISurveyResponseService responseService,
+            IAuthServiceHandler authServiceHandler)
         {
             _surveyService = surveyService;
             _responseService = responseService;
+            _authServiceHandler = authServiceHandler;
         }
 
         // GET /SurveyResponse/PublicSurveys
@@ -87,14 +91,25 @@ namespace AnketOtomasyonu.Controllers
             }
             else
             {
-                // ── NORMAL ANKET: login zorunlu ──
+                // ── NORMAL ANKET: her seferinde taze login zorunlu ──
                 var accessToken = HttpContext.Session.GetString("AccessToken");
-                if (string.IsNullOrEmpty(accessToken))
+                var fillAuth = HttpContext.Session.GetString("FillAuthenticated");
+
+                // Taze login bayrağı yoksa veya token geçersizse → login'e yönlendir
+                if (string.IsNullOrEmpty(fillAuth)
+                    || string.IsNullOrEmpty(accessToken)
+                    || !await ValidateAccessTokenAsync(accessToken))
                 {
-                    // Login sonrası bu ankete geri dön
+                    ClearSessionData();
                     var returnUrl = Url.Action("Fill", "SurveyResponse", new { id });
                     return RedirectToAction("Login", "Auth", new { returnUrl });
                 }
+
+                // Bayrağı tüket — bir sonraki Fill ziyaretinde tekrar login gerekecek
+                HttpContext.Session.Remove("FillAuthenticated");
+
+                // UserId'yi taze session'dan al
+                userId = HttpContext.Session.GetString("UserId");
 
                 if (await _responseService.HasUserRespondedAsync(id, userId))
                 {
@@ -156,11 +171,12 @@ namespace AnketOtomasyonu.Controllers
             }
             else
             {
-                // Normal ankette login zorunlu
+                // Normal ankette login zorunlu + token geçerlilik kontrolü
                 var sessionUserId = HttpContext.Session.GetString("UserId");
                 var submitAccessToken = HttpContext.Session.GetString("AccessToken");
-                if (string.IsNullOrEmpty(submitAccessToken))
+                if (string.IsNullOrEmpty(submitAccessToken) || !await ValidateAccessTokenAsync(submitAccessToken))
                 {
+                    ClearSessionData();
                     var returnUrl = Url.Action("Fill", "SurveyResponse", new { id = dto.SurveyId });
                     return RedirectToAction("Login", "Auth", new { returnUrl });
                 }
@@ -183,6 +199,11 @@ namespace AnketOtomasyonu.Controllers
             // Anonim anketlerde isAnonymous bilgisini Success sayfasına taşı
             if (survey.IsAnonymous)
                 TempData["IsAnonymous"] = "true";
+
+            // Anket gönderildikten sonra session'ı temizle — bir sonraki anket için tekrar login gerekecek
+            if (!survey.IsAnonymous)
+                ClearSessionData();
+
             return RedirectToAction("Success");
         }
 
@@ -196,6 +217,34 @@ namespace AnketOtomasyonu.Controllers
         // Anket bulunamadı / aktif değil — login gerekmez
         [HttpGet("SurveyResponse/NotFound_")]
         public IActionResult NotFound_() => View();
+
+        // ── ACCESS TOKEN DOĞRULAMA ─────────────────────────
+        /// <summary>
+        /// Token'ı uzak PermissionService'e gönderip hâlâ geçerli olup olmadığını kontrol eder.
+        /// Eski, süresi dolmuş veya geçersiz tokenlar için false döner.
+        /// </summary>
+        private async Task<bool> ValidateAccessTokenAsync(string accessToken)
+        {
+            try
+            {
+                return await _authServiceHandler.ValidateAuthServiceAsync(accessToken);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Geçersiz token tespit edildiğinde session verilerini temizler.
+        /// </summary>
+        private void ClearSessionData()
+        {
+            HttpContext.Session.Remove("AccessToken");
+            HttpContext.Session.Remove("UserId");
+            HttpContext.Session.Remove("UserFullName");
+            HttpContext.Session.Remove("UserRole");
+        }
 
         // ── IP ALMA YARDIMCI METODU ──────────────────────
         private string GetClientIp()
