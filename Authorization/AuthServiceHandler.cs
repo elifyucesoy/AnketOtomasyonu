@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using AnketOtomasyonu.Models.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using System.Text.Json;
 
 namespace AnketOtomasyonu.Authorization
@@ -52,19 +53,19 @@ namespace AnketOtomasyonu.Authorization
                 if (response.IsSuccessStatusCode)
                 {
                     var content = await response.Content.ReadAsStringAsync();
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var userResponse = JsonSerializer.Deserialize<CurrentUser>(content,
-                            new JsonSerializerOptions
-                            {
-                                PropertyNameCaseInsensitive = true
-                            });
-                        if (userResponse != null)
-                        {
-                            return userResponse;
-                        }
-                    }
 
+                    // API yanıtı { isSucceeded, error, value } sarmalıyla gelebilir
+                    var profileResult = JsonSerializer.Deserialize<ProfileResponseDto>(content,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (profileResult?.IsSucceeded == true && profileResult.Value != null)
+                        return profileResult.Value;
+
+                    // Fallback: bazı endpoint'ler doğrudan CurrentUser döner
+                    var direct = JsonSerializer.Deserialize<CurrentUser>(content,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (direct?.Id > 0)
+                        return direct;
                 }
                 return null;
 
@@ -168,7 +169,14 @@ namespace AnketOtomasyonu.Authorization
         public string Surname { get; set; } = "";
         public string Username { get; set; } = "";
         public string Email { get; set; } = "";
-        public UserType UserTypeId { get; set; } = 0;
+        /// <summary>
+        /// API'den dönen userTypeId: 0 = Employee, 1 = Student
+        /// </summary>
+        public int UserTypeId { get; set; } = 0;
+        /// <summary>
+        /// GetProfile'dan gelen izin bilgisi. true ise kullanıcı Admin paneline erişebilir.
+        /// </summary>
+        public bool HasPermission { get; set; } = false;
         public long TcIdentityNo { get; set; } = 0;
         public string Token { get; set; } = "";
         public DateTime TokenCreateDate { get; set; } = DateTime.Now;
@@ -199,11 +207,34 @@ namespace AnketOtomasyonu.Authorization
     {
         Employee = 0,
         Student = 1,
-        InstituteStudent = 2,
-        GuestEmployee = 3,
-        SystemUser = 4,
-        SystemAdmin = 5,
     }
+
+    /// <summary>
+    /// Session'daki "UserRole" değeri "Admin" ise erişime izin verir.
+    /// GetProfile'dan gelen HasPermission=true ise login sırasında session'a "Admin" yazılır.
+    /// </summary>
+    public class SessionAdminRequirement : IAuthorizationRequirement { }
+
+    public class SessionAdminHandler : AuthorizationHandler<SessionAdminRequirement>
+    {
+        private readonly IHttpContextAccessor _accessor;
+
+        public SessionAdminHandler(IHttpContextAccessor accessor)
+        {
+            _accessor = accessor;
+        }
+
+        protected override Task HandleRequirementAsync(
+            AuthorizationHandlerContext context,
+            SessionAdminRequirement requirement)
+        {
+            var role = _accessor.HttpContext?.Session.GetString("UserRole");
+            if (role == "Admin")
+                context.Succeed(requirement);
+            return Task.CompletedTask;
+        }
+    }
+
     public class AuthServicePermissionHandler : AuthorizationHandler<AuthServiceRequirement>
     {
         private readonly IAuthServiceHandler _authHandler;

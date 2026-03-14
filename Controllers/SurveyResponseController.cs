@@ -111,6 +111,20 @@ namespace AnketOtomasyonu.Controllers
                 // UserId'yi taze session'dan al
                 userId = HttpContext.Session.GetString("UserId");
 
+                // ── KULLANICI TİPİ KONTROLÜ ──
+                // Anketin TargetRoles alanı kullanıcının UserType'ını içermeli
+                var userType = HttpContext.Session.GetString("UserType");
+                if (!string.IsNullOrEmpty(survey.TargetRoles) && !string.IsNullOrEmpty(userType))
+                {
+                    var allowedTypes = survey.TargetRoles
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (!allowedTypes.Contains(userType, StringComparer.OrdinalIgnoreCase))
+                    {
+                        TempData["Error"] = "Bu anket sizin kullanıcı tipinize açık değildir.";
+                        return RedirectToAction("NotFound_", "SurveyResponse");
+                    }
+                }
+
                 if (await _responseService.HasUserRespondedAsync(id, userId))
                 {
                     TempData["Error"] = "Bu anketi zaten doldurdunuz.";
@@ -181,6 +195,19 @@ namespace AnketOtomasyonu.Controllers
                     return RedirectToAction("Login", "Auth", new { returnUrl });
                 }
 
+                // ── KULLANICI TİPİ KONTROLÜ (Submit tarafında da) ──
+                var userType = HttpContext.Session.GetString("UserType");
+                if (!string.IsNullOrEmpty(survey.TargetRoles) && !string.IsNullOrEmpty(userType))
+                {
+                    var allowedTypes = survey.TargetRoles
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (!allowedTypes.Contains(userType, StringComparer.OrdinalIgnoreCase))
+                    {
+                        TempData["Error"] = "Bu anket sizin kullanıcı tipinize açık değildir.";
+                        return RedirectToAction("NotFound_", "SurveyResponse");
+                    }
+                }
+
                 userId = sessionUserId;
             }
 
@@ -244,6 +271,8 @@ namespace AnketOtomasyonu.Controllers
             HttpContext.Session.Remove("UserId");
             HttpContext.Session.Remove("UserFullName");
             HttpContext.Session.Remove("UserRole");
+            HttpContext.Session.Remove("UserType");
+            HttpContext.Session.Remove("FillAuthenticated");
         }
 
         // ── IP ALMA YARDIMCI METODU ──────────────────────

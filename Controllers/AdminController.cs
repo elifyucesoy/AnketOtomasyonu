@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnketOtomasyonu.Controllers
 {
-    [Authorize(Policy = "AnketAdmin")]
+    [Authorize(Policy = "ANKET_API_ADMIN")]
     public class AdminController : Controller
     {
         private readonly ISurveyService _surveyService;
@@ -71,6 +71,7 @@ namespace AnketOtomasyonu.Controllers
         public IActionResult CreateSurvey() => View(new SurveyCreateViewModel());
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateSurvey(SurveyCreateDto dto)
         {
             if (!ModelState.IsValid)
@@ -83,11 +84,12 @@ namespace AnketOtomasyonu.Controllers
                 });
             }
 
-            var user = await _authHandler.GetCurrentUser();
-            if (user == null) return RedirectToAction("Login", "Auth");
+            // Kullanıcı bilgisi session'dan okunur (API çağrısı yapılmaz).
+            // GetCurrentUser() sahte/süresi dolmuş token ile başarısız olabilir.
+            var createdById   = HttpContext.Session.GetString("UserId") ?? "0";
+            var createdByName = HttpContext.Session.GetString("UserFullName") ?? "Bilinmiyor";
 
-            await _surveyService.CreateSurveyAsync(
-                dto, user.Id.ToString(), $"{user.Name} {user.Surname}");
+            await _surveyService.CreateSurveyAsync(dto, createdById, createdByName);
 
             TempData["Success"] = "Anket başarıyla oluşturuldu. Yayınlamak için Yayınla butonuna tıklayın.";
             return RedirectToAction("Dashboard");

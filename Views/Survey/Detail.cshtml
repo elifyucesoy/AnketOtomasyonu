@@ -36,7 +36,13 @@
     <div class="col-md-3">
         <div class="card border-0 shadow-sm text-center py-3">
             <small class="text-muted">Hedef</small><br />
-            <strong>@(string.IsNullOrEmpty(Model.TargetRoles) ? "Herkes" : Model.TargetRoles)</strong>
+            @{
+                var rolesDisplay = string.IsNullOrEmpty(Model.TargetRoles)
+                    ? "Herkes"
+                    : string.Join(", ", Model.TargetRoles.Split(',')
+                        .Select(r => r.Trim() == "Employee" ? "Personel" : r.Trim() == "Student" ? "Öğrenci" : r.Trim()));
+            }
+            <strong>@rolesDisplay</strong>
         </div>
     </div>
     <div class="col-md-3">

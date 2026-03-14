@@ -66,11 +66,12 @@
                     <label class="form-label fw-semibold">Hedef Roller</label><br />
                     @foreach (var role in Model.AvailableRoles)
                     {
+                        var displayLabel = role == "Employee" ? "Personel" : role == "Student" ? "Öğrenci" : role;
                         <div class="form-check form-check-inline">
                             <input class="form-check-input" type="checkbox" name="TargetRoles"
                                    value="@role" id="role_@role"
                                    @(selectedRoles.Contains(role) ? "checked" : "") />
-                            <label class="form-check-label" for="role_@role">@role</label>
+                            <label class="form-check-label" for="role_@role">@displayLabel</label>
                         </div>
                     }
                 </div>

@@ -30,8 +30,8 @@ namespace AnketOtomasyonu.Models.ViewModels
 
         public List<QuestionCreateViewModel> Questions { get; set; } = new();
 
-        /// <summary>Mevcut roller (checkbox listesi için)</summary>
-        public List<string> AvailableRoles { get; set; } = new() { "Admin", "Hoca", "Ogrenci" };
+        /// <summary>Mevcut roller (checkbox listesi için) — API'deki UserType değerlerine karşılık gelir</summary>
+        public List<string> AvailableRoles { get; set; } = new() { "Employee", "Student" };
     }
 
     public class QuestionCreateViewModel

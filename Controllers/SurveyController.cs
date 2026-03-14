@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AnketOtomasyonu.Controllers
 {
-    //[Authorize(Policy = "AnketAdmin")]
+    [Authorize(Policy = "ANKET_API_ADMIN")]
     public class SurveyController : Controller
     {
         private readonly ISurveyService _surveyService;
