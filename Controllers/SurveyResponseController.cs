@@ -1,10 +1,12 @@
-﻿using AnketOtomasyonu.Authorization;
 using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
 {
@@ -13,20 +15,16 @@ namespace AnketOtomasyonu.Controllers
     {
         private readonly ISurveyService _surveyService;
         private readonly ISurveyResponseService _responseService;
-        private readonly IAuthServiceHandler _authServiceHandler;
 
         public SurveyResponseController(
             ISurveyService surveyService,
-            ISurveyResponseService responseService,
-            IAuthServiceHandler authServiceHandler)
+            ISurveyResponseService responseService)
         {
             _surveyService = surveyService;
             _responseService = responseService;
-            _authServiceHandler = authServiceHandler;
         }
 
         // GET /SurveyResponse/PublicSurveys
-        // Herkese açık sayfa — tüm aktif anonim anketleri listeler, login gerekmez.
         [HttpGet]
         public async Task<IActionResult> PublicSurveys()
         {
@@ -34,9 +32,9 @@ namespace AnketOtomasyonu.Controllers
 
             var vm = new SurveyIndexViewModel
             {
-                UserFullName = HttpContext.Session.GetString("UserFullName"),
-                UserRole = HttpContext.Session.GetString("UserRole"),
-                IsLoggedIn = !string.IsNullOrEmpty(HttpContext.Session.GetString("AccessToken")),
+                UserFullName = User.FindFirstValue(ClaimTypes.Name),
+                UserRole = User.FindFirstValue(ClaimTypes.Role),
+                IsLoggedIn = User.Identity?.IsAuthenticated == true,
                 Surveys = surveys.Select(s => new SurveyListItemViewModel
                 {
                     Id = s.Id,
@@ -57,7 +55,6 @@ namespace AnketOtomasyonu.Controllers
         }
 
         // GET /SurveyResponse/Fill/{id}
-        // Anonim anketlerde login gerekmez; URL'deki id ile doğrudan erişilebilir.
         [HttpGet]
         public async Task<IActionResult> Fill(int id)
         {
@@ -76,11 +73,10 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction("Index", "Home");
             }
 
-            var userId = HttpContext.Session.GetString("UserId");
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             if (survey.IsAnonymous)
             {
-                // ── ANONİM ANKET: login gerekmez, IP ile tekrar doldurma kontrolü ──
                 var ip = GetClientIp();
                 if (!string.IsNullOrEmpty(ip) &&
                     await _responseService.HasRespondedByIpAsync(id, ip))
@@ -91,29 +87,14 @@ namespace AnketOtomasyonu.Controllers
             }
             else
             {
-                // ── NORMAL ANKET: her seferinde taze login zorunlu ──
-                var accessToken = HttpContext.Session.GetString("AccessToken");
-                var fillAuth = HttpContext.Session.GetString("FillAuthenticated");
-
-                // Taze login bayrağı yoksa veya token geçersizse → login'e yönlendir
-                if (string.IsNullOrEmpty(fillAuth)
-                    || string.IsNullOrEmpty(accessToken)
-                    || !await ValidateAccessTokenAsync(accessToken))
+                if (User.Identity == null || !User.Identity.IsAuthenticated)
                 {
-                    ClearSessionData();
                     var returnUrl = Url.Action("Fill", "SurveyResponse", new { id });
                     return RedirectToAction("Login", "Auth", new { returnUrl });
                 }
 
-                // Bayrağı tüket — bir sonraki Fill ziyaretinde tekrar login gerekecek
-                HttpContext.Session.Remove("FillAuthenticated");
-
-                // UserId'yi taze session'dan al
-                userId = HttpContext.Session.GetString("UserId");
-
                 // ── KULLANICI TİPİ KONTROLÜ ──
-                // Anketin TargetRoles alanı kullanıcının UserType'ını içermeli
-                var userType = HttpContext.Session.GetString("UserType");
+                var userType = User.FindFirstValue("UserTypeId") == "0" ? "Employee" : "Student";
                 if (!string.IsNullOrEmpty(survey.TargetRoles) && !string.IsNullOrEmpty(userType))
                 {
                     var allowedTypes = survey.TargetRoles
@@ -125,7 +106,7 @@ namespace AnketOtomasyonu.Controllers
                     }
                 }
 
-                if (await _responseService.HasUserRespondedAsync(id, userId))
+                if (await _responseService.HasUserRespondedAsync(id, userId!))
                 {
                     TempData["Error"] = "Bu anketi zaten doldurdunuz.";
                     return RedirectToAction("Index", "Home");
@@ -168,7 +149,6 @@ namespace AnketOtomasyonu.Controllers
         {
             var ip = GetClientIp();
 
-            // Anketi çekerek IsAnonymous kontrolü yap
             var survey = await _surveyService.GetSurveyWithQuestionsAsync(dto.SurveyId);
             if (survey == null)
             {
@@ -180,23 +160,17 @@ namespace AnketOtomasyonu.Controllers
 
             if (survey.IsAnonymous)
             {
-                // Anonim ankette login gerekmez; userId olarak IP kaydedilecek
                 userId = ip;
             }
             else
             {
-                // Normal ankette login zorunlu + token geçerlilik kontrolü
-                var sessionUserId = HttpContext.Session.GetString("UserId");
-                var submitAccessToken = HttpContext.Session.GetString("AccessToken");
-                if (string.IsNullOrEmpty(submitAccessToken) || !await ValidateAccessTokenAsync(submitAccessToken))
+                if (User.Identity == null || !User.Identity.IsAuthenticated)
                 {
-                    ClearSessionData();
                     var returnUrl = Url.Action("Fill", "SurveyResponse", new { id = dto.SurveyId });
                     return RedirectToAction("Login", "Auth", new { returnUrl });
                 }
 
-                // ── KULLANICI TİPİ KONTROLÜ (Submit tarafında da) ──
-                var userType = HttpContext.Session.GetString("UserType");
+                var userType = User.FindFirstValue("UserTypeId") == "0" ? "Employee" : "Student";
                 if (!string.IsNullOrEmpty(survey.TargetRoles) && !string.IsNullOrEmpty(userType))
                 {
                     var allowedTypes = survey.TargetRoles
@@ -208,7 +182,7 @@ namespace AnketOtomasyonu.Controllers
                     }
                 }
 
-                userId = sessionUserId;
+                userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             }
 
             var (success, message) =
@@ -223,13 +197,12 @@ namespace AnketOtomasyonu.Controllers
             }
 
             TempData["SuccessMessage"] = message;
-            // Anonim anketlerde isAnonymous bilgisini Success sayfasına taşı
             if (survey.IsAnonymous)
                 TempData["IsAnonymous"] = "true";
 
-            // Anket gönderildikten sonra session'ı temizle — bir sonraki anket için tekrar login gerekecek
+            // Anket gönderildikten sonra logout yap — bir sonraki anket için tekrar login gerekecek
             if (!survey.IsAnonymous)
-                ClearSessionData();
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
             return RedirectToAction("Success");
         }
@@ -237,58 +210,23 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public IActionResult Success() => View();
 
-        // Anonim anketlerde "zaten doldurdunuz" sayfası — login gerekmez
         [HttpGet]
         public IActionResult AlreadyFilled() => View();
 
-        // Anket bulunamadı / aktif değil — login gerekmez
         [HttpGet("SurveyResponse/NotFound_")]
         public IActionResult NotFound_() => View();
-
-        // ── ACCESS TOKEN DOĞRULAMA ─────────────────────────
-        /// <summary>
-        /// Token'ı uzak PermissionService'e gönderip hâlâ geçerli olup olmadığını kontrol eder.
-        /// Eski, süresi dolmuş veya geçersiz tokenlar için false döner.
-        /// </summary>
-        private async Task<bool> ValidateAccessTokenAsync(string accessToken)
-        {
-            try
-            {
-                return await _authServiceHandler.ValidateAuthServiceAsync(accessToken);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Geçersiz token tespit edildiğinde session verilerini temizler.
-        /// </summary>
-        private void ClearSessionData()
-        {
-            HttpContext.Session.Remove("AccessToken");
-            HttpContext.Session.Remove("UserId");
-            HttpContext.Session.Remove("UserFullName");
-            HttpContext.Session.Remove("UserRole");
-            HttpContext.Session.Remove("UserType");
-            HttpContext.Session.Remove("FillAuthenticated");
-        }
 
         // ── IP ALMA YARDIMCI METODU ──────────────────────
         private string GetClientIp()
         {
-            // Proxy/load balancer varsa X-Forwarded-For header'ına bak
             var forwarded = HttpContext.Request.Headers["X-Forwarded-For"]
                 .FirstOrDefault();
             if (!string.IsNullOrEmpty(forwarded))
                 return forwarded.Split(',')[0].Trim();
 
-            // Doğrudan bağlantı IP'si
             var ip = HttpContext.Connection.RemoteIpAddress;
             if (ip == null) return "unknown";
 
-            // IPv6 loopback (::1) → IPv4'e çevir
             if (ip.IsIPv4MappedToIPv6)
                 return ip.MapToIPv4().ToString();
 

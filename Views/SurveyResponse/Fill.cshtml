@@ -1,4 +1,4 @@
-﻿@using AnketOtomasyonu.Models.Entities
+@using AnketOtomasyonu.Models.Entities
 @model AnketOtomasyonu.Models.ViewModels.SurveyFillViewModel
 @{
     ViewData["Title"] = Model.Title;
@@ -203,29 +203,41 @@
 
         document.getElementById('fillForm').addEventListener('submit', function (e) {
 
-            // 1) Zorunlu radio kontrolü
-            var radioGroups = {};
+            // 1) Zorunlu radio kontrolü — * işaretli radio soruları cevaplanmalı
+            var requiredGroups = {};
             document.querySelectorAll('input[type="radio"][data-required="true"]').forEach(function(el) {
-                if (!radioGroups[el.name]) radioGroups[el.name] = false;
-                if (el.checked) radioGroups[el.name] = true;
+                var groupName = el.name;
+                if (typeof requiredGroups[groupName] === 'undefined') {
+                    requiredGroups[groupName] = false;
+                }
+                if (el.checked) {
+                    requiredGroups[groupName] = true;
+                }
             });
-            for (var name in radioGroups) {
-                if (!radioGroups[name]) {
-                    e.preventDefault();
-                    alert('Lütfen zorunlu (*) soruları cevaplayınız.');
-                    return;
+            var missingRadio = false;
+            for (var name in requiredGroups) {
+                if (requiredGroups[name] === false) {
+                    missingRadio = true;
+                    break;
                 }
             }
+            if (missingRadio) {
+                e.preventDefault();
+                alert('Lütfen zorunlu (*) çoktan seçmeli/likert soruları işaretleyiniz.');
+                return;
+            }
 
-            // 2) Zorunlu textarea kontrolü
+            // 2) Zorunlu textarea kontrolü — * işaretli açık uçlu sorular cevaplanmalı
             var ok = true;
             document.querySelectorAll('textarea[data-required="true"]').forEach(function(el) {
                 if (!el.value.trim()) {
                     e.preventDefault();
                     el.style.borderColor = '#dc3545';
-                    el.focus();
-                    alert('Lütfen zorunlu (*) soruları cevaplayınız.');
+                    if (ok) el.focus(); // Sadece ilk boşluğa odaklansın
+                    alert('Lütfen zorunlu (*) açık uçlu soruları doldurunuz.');
                     ok = false;
+                } else {
+                    el.style.borderColor = ''; // Hatayı temizle
                 }
             });
             if (!ok) return;

@@ -3,6 +3,7 @@ using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
 {
@@ -22,9 +23,9 @@ namespace AnketOtomasyonu.Controllers
 
             var vm = new SurveyIndexViewModel
             {
-                UserFullName = HttpContext.Session.GetString("UserFullName"),
-                UserRole = HttpContext.Session.GetString("UserRole"),
-                IsLoggedIn = !string.IsNullOrEmpty(HttpContext.Session.GetString("AccessToken")),
+                UserFullName = User.FindFirstValue(ClaimTypes.Name),
+                UserRole = User.FindFirstValue(ClaimTypes.Role),
+                IsLoggedIn = User.Identity?.IsAuthenticated == true,
                 Surveys = surveys.Select(s => new SurveyListItemViewModel
                 {
                     Id = s.Id,

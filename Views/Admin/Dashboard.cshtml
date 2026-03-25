@@ -1,4 +1,4 @@
-﻿@using AnketOtomasyonu.Models.ViewModels
+@using AnketOtomasyonu.Models.ViewModels
 @model AdminDashboardViewModel
 @{
     ViewData["Title"] = "Yönetim Paneli";
@@ -63,7 +63,6 @@
                             <th>Anket Adı</th>
                             <th>Tür</th>
                             <th>Durum</th>
-                            <th>Anket URL</th>
                             <th>Soru</th>
                             <th>Yanıt</th>
                             <th>Oluşturan</th>
@@ -77,36 +76,16 @@
                             <tr>
                                 <td class="fw-semibold">
                                     @s.Title
-                                    @if (s.IsAnonymous)
-                                    {
-                                        <span class="badge bg-info ms-1">Anonim</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-warning text-dark ms-1">Login Gerekli</span>
-                                    }
                                 </td>
                                 <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
                                 <td>
-                                    @if (s.Status == "Aktif")
+                                    @if (s.IsAnonymous)
                                     {
-                                        <div class="d-flex align-items-center gap-1">
-                                            <code class="small text-truncate" style="max-width:180px;display:inline-block;" id="url-text-@s.Id">/SurveyResponse/Fill/@s.Id</code>
-                                            <button type="button"
-                                                    class="btn btn-sm btn-outline-dark py-0 px-1"
-                                                    title="URL Kopyala"
-                                                    onclick="copySurveyLink(@s.Id, @s.IsAnonymous.ToString().ToLower(), this)">
-                                                <i class="bi bi-clipboard" style="font-size:0.75rem;"></i>
-                                            </button>
-                                        </div>
-                                        @if (!s.IsAnonymous)
-                                        {
-                                            <small class="text-muted" style="font-size:0.7rem;"><i class="bi bi-lock me-1"></i>Login gerekli</small>
-                                        }
+                                        <span class="badge bg-info">Anonim</span>
                                     }
                                     else
                                     {
-                                        <span class="text-muted small">-</span>
+                                        <span class="badge bg-warning text-dark">Giriş Gerekli</span>
                                     }
                                 </td>
                                 <td>@s.QuestionCount</td>
@@ -116,13 +95,25 @@
                                 <td class="text-end">
                                     <div class="d-flex gap-1 justify-content-end">
 
+                                        <!-- İNCELE (sadece aktif anketler) -->
+                                        @if (s.Status == "Aktif")
+                                        {
+                                            <a asp-controller="Survey"
+                                               asp-action="Detail"
+                                               asp-route-id="@s.Id"
+                                               class="btn btn-sm btn-outline-dark"
+                                               title="İncele">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        }
+
                                         <!-- ANKET URL KOPYALA -->
                                         @if (s.Status == "Aktif")
                                         {
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-secondary"
                                                     title="Anket Linkini Kopyala"
-                                                    onclick="copySurveyLink(@s.Id, this)">
+                                                    onclick="copySurveyLink(@s.Id, @s.IsAnonymous.ToString().ToLower(), this)">
                                                 <i class="bi bi-link-45deg"></i>
                                             </button>
                                         }
@@ -232,23 +223,28 @@
 
 @section Scripts {
 <script>
-    function copySurveyLink(surveyId, btn) {
+    // surveyId  : anket ID
+    // isAnonymous : true/false (anonim mi?)
+    // btn       : tıklanan button elementi
+    function copySurveyLink(surveyId, isAnonymous, btn) {
         var url = window.location.origin + '/SurveyResponse/Fill/' + surveyId;
-        var label = isAnonymous ? 'Anonim anket linki' : 'Anket linki (login gerekli)';
+        var label = isAnonymous
+            ? 'Anonim anket linki (kopyalayın):'
+            : 'Anket linki – login gerekli (kopyalayın):';
 
         navigator.clipboard.writeText(url).then(function () {
             var orig = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-check-lg text-white"></i>';
-            btn.classList.remove('btn-outline-secondary');
+            var origClass = isAnonymous ? 'btn-outline-dark' : 'btn-outline-secondary';
+            btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+            btn.classList.remove('btn-outline-dark', 'btn-outline-secondary');
             btn.classList.add('btn-success');
-            btn.classList.remove('btn-outline-dark', 'btn-outline-secondary', 'btn-outline-primary');
             setTimeout(function () {
                 btn.innerHTML = orig;
                 btn.classList.remove('btn-success');
-                btn.classList.add('btn-outline-dark');
+                btn.classList.add(origClass);
             }, 1500);
         }).catch(function () {
-            prompt('Anket linki (kopyalayın):', url);
+            prompt(label, url);
         });
     }
 </script>

@@ -1,10 +1,11 @@
-﻿using AnketOtomasyonu.Authorization;
-using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.ViewModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
-using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using System.Security.Claims;
+using System.Text;
+using System.Xml.Linq;
 
 namespace AnketOtomasyonu.Controllers
 {
@@ -12,27 +13,23 @@ namespace AnketOtomasyonu.Controllers
     public class AuthController : Controller
     {
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IAuthServiceHandler _authHandler;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
         private readonly IWebHostEnvironment _env;
 
         public AuthController(
             IHttpClientFactory httpClientFactory,
-            IAuthServiceHandler authHandler,
             IConfiguration configuration,
             ILogger<AuthController> logger,
             IWebHostEnvironment env)
         {
             _httpClientFactory = httpClientFactory;
-            _authHandler = authHandler;
             _configuration = configuration;
             _logger = logger;
             _env = env;
         }
 
         // ─── SADECE DEVELOPMENT ─────────────────────────────────────────────────
-        // /Auth/DevLogin  →  gerçek API olmadan session'ı elle kurar (test amaçlı)
         [HttpGet]
         public IActionResult DevLogin()
         {
@@ -43,47 +40,44 @@ namespace AnketOtomasyonu.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult DevLogin(string role)
+        public async Task<IActionResult> DevLogin(string role)
         {
             if (!_env.IsDevelopment() || _configuration.GetValue<bool>("DevLogin:Enabled") == false)
                 return NotFound();
 
-            HttpContext.Session.Clear();
-            HttpContext.Session.SetString("AccessToken", "Bearer dev-test-token");
-            HttpContext.Session.SetString("UserId", "9999");
-
-            // role: "Admin" | "Employee" | "Student"
-            string sessionRole, userTypeStr;
+            string sessionRole;
             int userTypeId;
+            string userId = "9999";
 
             switch (role)
             {
+                case "SuperAdmin":
+                    sessionRole = "SuperAdmin";
+                    userTypeId = 0;
+                    break;
                 case "Admin":
-                    sessionRole  = "Admin";
-                    userTypeStr  = "Employee";
-                    userTypeId   = 0;
+                    sessionRole = "Admin";
+                    userTypeId = 0;
+                    userId = "8888"; // Fakülte Admini ID'si
                     break;
                 case "Employee":
-                    sessionRole  = "Employee";
-                    userTypeStr  = "Employee";
-                    userTypeId   = 0;
+                    sessionRole = "Employee";
+                    userTypeId = 0;
                     break;
-                default: // "Student"
-                    sessionRole  = "Student";
-                    userTypeStr  = "Student";
-                    userTypeId   = 1;
+                default: 
+                    sessionRole = "Student";
+                    userTypeId = 1;
                     break;
             }
 
-            HttpContext.Session.SetString("UserRole",     sessionRole);
-            HttpContext.Session.SetString("UserType",     userTypeStr);
-            HttpContext.Session.SetInt32 ("UserTypeId",   userTypeId);
-            HttpContext.Session.SetString("UserFullName", $"DevUser ({sessionRole})");
+            var identity = CreateClaimsIdentity(userId, $"DevUser ({sessionRole})", sessionRole, userTypeId);
+            var principal = new ClaimsPrincipal(identity);
+            
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-            _logger.LogWarning("[DEV-LOGIN] Session kuruldu → Role:{R} UserType:{T}",
-                sessionRole, userTypeStr);
+            _logger.LogWarning("[DEV-LOGIN] Cookie Session kuruldu → Role:{R} Type:{T}", sessionRole, userTypeId);
 
-            return sessionRole == "Admin"
+            return (sessionRole == "Admin" || sessionRole == "SuperAdmin")
                 ? RedirectToAction("Dashboard", "Admin")
                 : RedirectToAction("Index", "Home");
         }
@@ -92,16 +86,15 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public IActionResult Login(string? returnUrl = null)
         {
-            // Anket doldurma sayfasına gidiyorsa her zaman taze login iste
             bool isSurveyFill = !string.IsNullOrEmpty(returnUrl)
                 && returnUrl.Contains("SurveyResponse/Fill", StringComparison.OrdinalIgnoreCase);
 
-            if (!string.IsNullOrEmpty(HttpContext.Session.GetString("AccessToken")))
+            if (User.Identity != null && User.Identity.IsAuthenticated)
             {
                 if (isSurveyFill)
                 {
-                    // Anket doldurmak için eski session geçersiz — temizle, login formunu göster
-                    HttpContext.Session.Clear();
+                    // Farklı ankete giderken temizle
+                    HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                 }
                 else
                 {
@@ -112,6 +105,7 @@ namespace AnketOtomasyonu.Controllers
             }
 
             ViewBag.ReturnUrl = returnUrl;
+            ViewBag.IsSurveyFill = isSurveyFill;
             return View(new LoginViewModel());
         }
 
@@ -124,111 +118,88 @@ namespace AnketOtomasyonu.Controllers
 
             try
             {
-                var baseUrl = _configuration["PermissionService:BaseUrl"]!;
-                var client = _httpClientFactory.CreateClient();
+                var user = model.Username.Trim();
+                var pass = model.Password;
+                var stajToken = "tekn0l0j1T00cken";
 
-                // 1) Login
-                var loginBody = new
+                bool isNumeric = user.All(char.IsDigit);
+
+                ClaimsIdentity? identity = null;
+                string userRole = "Student";
+                string fullName = user;
+                string userId = "0";
+                bool isAdmin = false;
+                int userTypeId = 1;
+
+                if (isNumeric)
                 {
-                    userName = model.Username,
-                    password = model.Password,
-                    deviceToken = "web",
-                    channel = 0
-                };
-
-                var loginResp = await client.PostAsync(
-                    $"{baseUrl}/api/v1/Auth/Login",
-                    new StringContent(
-                        JsonSerializer.Serialize(loginBody),
-                        System.Text.Encoding.UTF8,
-                        "application/json"));
-
-                var loginContent = await loginResp.Content.ReadAsStringAsync();
-                _logger.LogInformation("Login Response: {Content}", loginContent);
-
-                var loginResult = JsonSerializer.Deserialize<LoginResponseDto>(
-                    loginContent,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-                if (loginResult == null || !loginResult.IsSucceeded || loginResult.Value == null)
+                    // ÖĞRENCİ Girişi
+                    var studentXml = await CallStudentAuthAsync(user, pass, stajToken);
+                    if (studentXml != null) 
+                    {
+                        userId = studentXml.OgrNo;
+                        fullName = $"{studentXml.Ad} {studentXml.Soyad}".Trim();
+                        userRole = "Student";
+                        userTypeId = 1;
+                        identity = CreateClaimsIdentity(userId, fullName, userRole, userTypeId);
+                        _logger.LogInformation("Öğrenci girişi başarılı. OgrNo: {OgrNo}", userId);
+                    }
+                }
+                else
                 {
-                    ViewBag.Error = loginResult?.Error?.Message
-                        ?? "Kullanıcı adı veya şifre hatalı.";
+                    // PERSONEL Girişi
+                    var mailKismi = user.Replace("@selcuk.edu.tr", "");
+                    var tcKimlik = await CallLdapAuthAsync(mailKismi, pass, stajToken);
+                    
+                    if (!string.IsNullOrEmpty(tcKimlik))
+                    {
+                        var personnelXml = await CallPersonnelProfileAsync(tcKimlik, stajToken);
+                        if (personnelXml != null)
+                        {
+                            userId = personnelXml.TC; 
+                            fullName = $"{personnelXml.Ad} {personnelXml.Soyad}".Trim();
+                            userTypeId = 0;
+
+                            // Admin kontrolü
+                            var admins = _configuration.GetSection("FacultyAdmins").Get<string[]>() ?? Array.Empty<string>();
+                            var superAdmins = _configuration.GetSection("SuperAdminUsernames").Get<string[]>() ?? Array.Empty<string>();
+                            
+                            if (superAdmins.Contains(mailKismi, StringComparer.OrdinalIgnoreCase))
+                            {
+                                userRole = "SuperAdmin";
+                                isAdmin = true;
+                            }
+                            else if (admins.Contains(mailKismi, StringComparer.OrdinalIgnoreCase) || admins.Contains("*")) 
+                            {
+                                // Eğer appsettings'te FacultyAdmins: ["*"] ayarlıysa tüm personeller admin sayılır. Değilse sadece listedekiler.
+                                userRole = "Admin";
+                                isAdmin = true;
+                            }
+                            else
+                            {
+                                userRole = "Employee"; 
+                                isAdmin = false;
+                            }
+
+                            identity = CreateClaimsIdentity(userId, fullName, userRole, userTypeId);
+                            _logger.LogInformation("Personel girişi başarılı. TC: {TC}, Rol: {Rol}", userId, userRole);
+                        }
+                    }
+                }
+
+                if (identity == null)
+                {
+                    ViewBag.Error = "Kullanıcı adı veya şifre hatalı.";
                     return View(model);
                 }
 
-                var accessToken = loginResult.Value.AccessToken;
+                // Cookie SignIn
+                var principal = new ClaimsPrincipal(identity);
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
-                // 2) GetProfile
-                var profileReq = new HttpRequestMessage(HttpMethod.Get,
-                    $"{baseUrl}/api/v1/Auth/GetProfile");
-                profileReq.Headers.Add("Authorization", $"Bearer {accessToken}");
-
-                var profileResp = await client.SendAsync(profileReq);
-                var profileContent = await profileResp.Content.ReadAsStringAsync();
-
-                _logger.LogInformation("Profile Status: {Code}", profileResp.StatusCode);
-                _logger.LogInformation("Profile Content: {Content}", profileContent);
-
-                // GetProfile yanıtı Login gibi { isSucceeded, error, value } sarmalıdır.
-                // value içinde userTypeId (0=Employee, 1=Student) ve hasPermission alanları gelir.
-                AnketOtomasyonu.Authorization.CurrentUser? user = null;
-                if (profileResp.IsSuccessStatusCode)
-                {
-                    var profileResult = JsonSerializer.Deserialize<ProfileResponseDto>(
-                        profileContent,
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-                    if (profileResult?.IsSucceeded == true && profileResult.Value != null)
-                        user = profileResult.Value;
-                    else
-                        // Fallback: bazı API'ler value sarması olmadan doğrudan döner
-                        user = JsonSerializer.Deserialize<AnketOtomasyonu.Authorization.CurrentUser>(
-                            profileContent,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                }
-
-                _logger.LogInformation(
-                    "Parsed — UserId:{Id} Name:{Name} Surname:{Surname} UserTypeId:{UT} HasPermission:{HP}",
-                    user?.Id, user?.Name, user?.Surname, user?.UserTypeId, user?.HasPermission);
-
-                // 3) Session'a yaz
-                HttpContext.Session.SetString("AccessToken", $"Bearer {accessToken}");
-                HttpContext.Session.SetString("UserId", (user?.Id ?? 0).ToString());
-
-                var fullName = $"{user?.Name} {user?.Surname}".Trim();
-                HttpContext.Session.SetString("UserFullName",
-                    string.IsNullOrWhiteSpace(fullName) ? (user?.Username ?? "") : fullName);
-
-                // 4) UserRole belirleme:
-                //    hasPermission=true           → "Admin"   (dashboard, anket yönetimi)
-                //    hasPermission=false, type=0  → "Employee" (personel, ANKET_API_STUDENT erişimi)
-                //    hasPermission=false, type=1  → "Student"  (öğrenci, ANKET_API_STUDENT erişimi)
-                var isAdmin    = user?.HasPermission ?? false;
-                var userTypeId = user?.UserTypeId ?? 1;
-                var userTypeStr = userTypeId == 0 ? "Employee" : "Student";
-
-                var sessionRole = isAdmin ? "Admin" : userTypeStr; // "Admin" | "Employee" | "Student"
-                HttpContext.Session.SetString("UserRole",   sessionRole);
-                HttpContext.Session.SetString("UserType",   userTypeStr);
-                HttpContext.Session.SetInt32 ("UserTypeId", userTypeId);
-
-                _logger.LogInformation(
-                    "Login OK — User:{Name} Id:{Id} Role:{R} UserTypeId:{UT} HasPermission:{HP}",
-                    fullName, user?.Id, sessionRole, userTypeId, user?.HasPermission);
-
-                // Anket doldurma sayfasına yönlendiriliyorsa tek kullanımlık bayrak set et
-                if (!string.IsNullOrEmpty(returnUrl)
-                    && returnUrl.Contains("SurveyResponse/Fill", StringComparison.OrdinalIgnoreCase))
-                {
-                    HttpContext.Session.SetString("FillAuthenticated", "true");
-                }
-
-                // returnUrl varsa oraya yönlendir
                 if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
                     return Redirect(returnUrl);
 
-                // Admin ise doğrudan dashboard'a, değilse ana sayfaya
                 if (isAdmin)
                     return RedirectToAction("Dashboard", "Admin");
 
@@ -236,21 +207,153 @@ namespace AnketOtomasyonu.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Login hatası");
-                ViewBag.Error = "Sunucu hatası. Lütfen tekrar deneyin.";
+                _logger.LogError(ex, "Login esnasında sistemsel bir hata oluştu");
+                ViewBag.Error = "Sistemsel bir hata oluştu. Lütfen daha sonra tekrar deneyin.";
                 return View(model);
             }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult Logout()
+        public async Task<IActionResult> Logout()
         {
-            HttpContext.Session.Clear();
-            return RedirectToAction("Index", "Home");
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction("Login", "Auth");
         }
 
-        [HttpGet]
-        public IActionResult AccessDenied() => View();
+        private ClaimsIdentity CreateClaimsIdentity(string userId, string fullName, string role, int userTypeId)
+        {
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, userId),
+                new Claim(ClaimTypes.Name, fullName),
+                new Claim(ClaimTypes.Role, role),
+                new Claim("UserTypeId", userTypeId.ToString())
+            };
+            return new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        }
+
+        // ─── ASMX YARDIMCI METOTLARI ───
+
+        private async Task<string?> CallLdapAuthAsync(string mail, string pass, string token)
+        {
+            string soapEnvelope = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+  <soap:Body>
+    <MailSifreStajToken xmlns=""http://tempuri.org/"">
+      <mail>{System.Security.SecurityElement.Escape(mail)}</mail>
+      <sifre>{System.Security.SecurityElement.Escape(pass)}</sifre>
+      <token>{System.Security.SecurityElement.Escape(token)}</token>
+    </MailSifreStajToken>
+  </soap:Body>
+</soap:Envelope>";
+
+            var client = _httpClientFactory.CreateClient();
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://restwebservis.selcuk.edu.tr/LDAPAuth.asmx");
+            request.Headers.Add("SOAPAction", "\"http://tempuri.org/MailSifreStajToken\"");
+            request.Content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
+
+            var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("[LDAP] SOAP hata {Status}: {Body}", response.StatusCode, err);
+                return null;
+            }
+
+            var xmlString = await response.Content.ReadAsStringAsync();
+            var doc = XDocument.Parse(xmlString);
+            var result = doc.Descendants().FirstOrDefault(x => x.Name.LocalName == "MailSifreStajTokenResult")?.Value;
+            return string.IsNullOrWhiteSpace(result) ? null : result;
+        }
+
+        private async Task<PersonnelDetail?> CallPersonnelProfileAsync(string tc, string token)
+        {
+            string soapEnvelope = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+  <soap:Body>
+    <NetiketPersonelDondurStajyer xmlns=""http://tempuri.org/"">
+      <tc>{System.Security.SecurityElement.Escape(tc)}</tc>
+      <token>{System.Security.SecurityElement.Escape(token)}</token>
+    </NetiketPersonelDondurStajyer>
+  </soap:Body>
+</soap:Envelope>";
+
+            var client = _httpClientFactory.CreateClient();
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://restwebservis.selcuk.edu.tr/kimlik.asmx");
+            request.Headers.Add("SOAPAction", "\"http://tempuri.org/NetiketPersonelDondurStajyer\"");
+            request.Content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
+
+            var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("[Kimlik/Personel] SOAP hata {Status}: {Body}", response.StatusCode, err);
+                return null;
+            }
+
+            var xmlString = await response.Content.ReadAsStringAsync();
+            var doc = XDocument.Parse(xmlString);
+            var resultNode = doc.Descendants().FirstOrDefault(x => x.Name.LocalName == "NetiketPersonelDondurStajyerResult");
+            if (resultNode == null) return null;
+
+            return new PersonnelDetail
+            {
+                TC = resultNode.Elements().FirstOrDefault(x => x.Name.LocalName == "TCKIMLIK")?.Value ?? tc,
+                Ad = resultNode.Elements().FirstOrDefault(x => x.Name.LocalName == "AD")?.Value ?? "",
+                Soyad = resultNode.Elements().FirstOrDefault(x => x.Name.LocalName == "SOYAD")?.Value ?? "",
+                Unvan = resultNode.Elements().FirstOrDefault(x => x.Name.LocalName == "UNVAN")?.Value ?? ""
+            };
+        }
+
+        private async Task<StudentDetail?> CallStudentAuthAsync(string no, string pass, string token)
+        {
+            string soapEnvelope = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soap:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+  <soap:Body>
+    <OgrenciSifreDogrulaStajyer xmlns=""http://tempuri.org/"">
+      <token>{System.Security.SecurityElement.Escape(token)}</token>
+      <numara>{System.Security.SecurityElement.Escape(no)}</numara>
+      <parola>{System.Security.SecurityElement.Escape(pass)}</parola>
+    </OgrenciSifreDogrulaStajyer>
+  </soap:Body>
+</soap:Envelope>";
+
+            var client = _httpClientFactory.CreateClient();
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://restwebservis.selcuk.edu.tr/kimlik.asmx");
+            request.Headers.Add("SOAPAction", "\"http://tempuri.org/OgrenciSifreDogrulaStajyer\"");
+            request.Content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
+
+            var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("[Kimlik/Ogrenci] SOAP hata {Status}: {Body}", response.StatusCode, err);
+                return null;
+            }
+
+            var xmlString = await response.Content.ReadAsStringAsync();
+            _logger.LogInformation("[Kimlik/Ogrenci] SOAP yanıtı: {Xml}", xmlString);
+            var doc = XDocument.Parse(xmlString);
+
+            var infoNode = doc.Descendants().FirstOrDefault(x => x.Name.LocalName == "YemekhaneLoginInfo");
+            if (infoNode == null) return null;
+
+            // SonucHataKodu: "0" = başarılı, diğerleri = hata
+            var hataKodu = infoNode.Elements().FirstOrDefault(x => x.Name.LocalName == "SonucHataKodu")?.Value;
+            if (!string.IsNullOrEmpty(hataKodu) && hataKodu != "0")
+                return null;
+
+            return new StudentDetail
+            {
+                OgrNo = infoNode.Elements().FirstOrDefault(x => x.Name.LocalName == "OGRNO")?.Value ?? no,
+                Ad = infoNode.Elements().FirstOrDefault(x => x.Name.LocalName == "AD")?.Value ?? "",
+                Soyad = infoNode.Elements().FirstOrDefault(x => x.Name.LocalName == "SOYAD")?.Value ?? "",
+                Fakulte = infoNode.Elements().FirstOrDefault(x => x.Name.LocalName == "FAKULTEADI")?.Value ?? ""
+            };
+        }
+
+        private class PersonnelDetail { public string TC{get;set;}="" ; public string Ad{get;set;}=""; public string Soyad{get;set;}=""; public string Unvan{get;set;}="" ; }
+        private class StudentDetail { public string OgrNo{get;set;}=""; public string Ad{get;set;}=""; public string Soyad{get;set;}=""; public string Fakulte{get;set;}=""; }
     }
 }

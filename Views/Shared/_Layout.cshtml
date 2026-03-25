@@ -12,60 +12,69 @@
 
     <style>
         :root {
-            --su-dark: #3A3A3A;
+            --su-navy:   #1B2A4A;
+            --su-navy2:  #142038;
             --su-yellow: #F9BC00;
+            --su-dark:   #1B2A4A;
         }
 
         body {
-            font-family: 'Segoe UI',Tahoma,sans-serif;
-            background: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #f0f4f8;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
 
+        /* NAVBAR */
         .navbar-su {
-            background: var(--su-dark) !important;
+            background: var(--su-navy) !important;
         }
 
-            .navbar-su .navbar-brand {
-                color: var(--su-yellow) !important;
-                font-weight: 700;
-            }
+        .navbar-su .navbar-brand {
+            color: var(--su-yellow) !important;
+            font-weight: 700;
+        }
 
-            .navbar-su .nav-link {
-                color: rgba(255,255,255,.85) !important;
-                font-weight: 500;
-            }
+        .navbar-su .nav-link {
+            color: rgba(255,255,255,.85) !important;
+            font-weight: 500;
+        }
 
-                .navbar-su .nav-link:hover {
-                    color: var(--su-yellow) !important;
-                }
+        .navbar-su .nav-link:hover,
+        .navbar-su .nav-link.active {
+            color: var(--su-yellow) !important;
+        }
 
+        .navbar-su .dropdown-menu {
+            border: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,.15);
+        }
+
+        /* BUTTONS */
         .btn-su {
             background: var(--su-yellow);
-            color: var(--su-dark);
-            font-weight: 600;
+            color: var(--su-navy);
+            font-weight: 700;
             border: none;
             border-radius: 25px;
             padding: 8px 24px;
         }
 
-            .btn-su:hover {
-                background: #E0AB00;
-                color: var(--su-dark);
-            }
+        .btn-su:hover {
+            background: #E0AB00;
+            color: var(--su-navy);
+        }
 
+        /* FOOTER */
         .footer-su {
-            background: var(--su-dark);
-            color: #999;
+            background: var(--su-navy2);
+            color: rgba(255,255,255,.45);
             padding: 20px 0;
             margin-top: auto;
         }
 
-        main {
-            flex: 1;
-        }
+        main { flex: 1; }
     </style>
 
     @await RenderSectionAsync("Styles", required: false)
@@ -150,14 +159,6 @@
                                         </form>
                                     </li>
                                 </ul>
-                            </li>
-                        }
-                        else
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link" asp-controller="Auth" asp-action="Login">
-                                    <i class="bi bi-box-arrow-in-right me-1"></i>Giriş Yap
-                                </a>
                             </li>
                         }
                     </ul>

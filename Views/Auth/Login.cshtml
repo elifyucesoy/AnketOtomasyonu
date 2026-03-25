@@ -216,8 +216,29 @@
     <div class="login-container">
         <div class="login-header">
             <h1>Selcuk Universitesi</h1>
-            <p>Anket Otomasyonu - Giris</p>
+            @if (ViewBag.IsSurveyFill == true)
+            {
+                <p><strong>Öğrenci / Personel</strong> Girişi</p>
+            }
+            else
+            {
+                <p>Anket Otomasyonu - Giris</p>
+            }
         </div>
+
+        @if (ViewBag.IsSurveyFill == true)
+        {
+            <div style="background:#fff8e1;border:1.5px solid #F9BC00;border-radius:12px;
+                        padding:14px 16px;margin-bottom:20px;font-size:13px;color:#5a4a00;">
+                <i class="bi bi-info-circle-fill me-1" style="color:#F9BC00;"></i>
+                Bu giriş sayfası <strong>yalnızca öğrenci ve personel</strong> içindir.<br />
+                Admin girişi için
+                <a href="/Auth/Login" style="color:#3A3A3A;font-weight:700;">
+                    genel giriş sayfasını
+                </a>
+                kullanınız.
+            </div>
+        }
 
         @if (ViewBag.Error != null)
         {

@@ -1,4 +1,4 @@
-﻿@using AnketOtomasyonu.Models.ViewModels
+@using AnketOtomasyonu.Models.ViewModels
 @using AnketOtomasyonu.Models.Entities
 @model SurveyCreateViewModel
 @{
@@ -28,11 +28,11 @@
                 </div>
                 <div class="col-md-6">
                     <label asp-for="StartDate" class="form-label fw-semibold"></label>
-                    <input asp-for="StartDate" class="form-control" type="date" id="startDate" />
+                    <input asp-for="StartDate" class="form-control" type="date" id="startDate" onclick="if(typeof this.showPicker === 'function') this.showPicker();" />
                 </div>
                 <div class="col-md-6">
                     <label asp-for="EndDate" class="form-label fw-semibold"></label>
-                    <input asp-for="EndDate" class="form-control" type="date" id="endDate" />
+                    <input asp-for="EndDate" class="form-control" type="date" id="endDate" onclick="if(typeof this.showPicker === 'function') this.showPicker();" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Hedef Roller</label><br />
@@ -90,7 +90,9 @@
                 '<option value="1">Likert (5li Olcek)</option>' +
                 '<option value="2">Coktan Secmeli</option>' +
                 '<option value="3">Acik Uclu</option></select></div>' +
-                '<div class="col-12"><div class="form-check"><input type="hidden" name="Questions[' + qIndex + '].IsRequired" value="false" /><input type="checkbox" name="Questions[' + qIndex + '].IsRequired" value="true" class="form-check-input" checked />' +
+                '<div class="col-12"><div class="form-check">' +
+                '<input type="checkbox" name="Questions[' + qIndex + '].IsRequired" value="true" class="form-check-input" checked />' +
+                '<input type="hidden" name="Questions[' + qIndex + '].IsRequired" value="false" />' +
                 '<label class="form-check-label">Zorunlu soru</label></div></div>' +
                 '<input type="hidden" name="Questions[' + qIndex + '].OrderIndex" value="' + qIndex + '" />' +
                 '</div><div class="mt-3 options-area" id="opts_' + qIndex + '" style="display:none;">' +

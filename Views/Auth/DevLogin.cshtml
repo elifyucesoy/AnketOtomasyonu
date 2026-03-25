@@ -38,9 +38,20 @@
                 <div class="d-flex flex-column gap-2">
 
                     <label class="d-flex align-items-center gap-0">
-                        <input type="radio" name="role" value="Admin" class="d-none" id="r_admin" checked />
+                        <input type="radio" name="role" value="SuperAdmin" class="d-none" id="r_superadmin" checked />
+                        <div class="role-card w-100" onclick="document.getElementById('r_superadmin').click()">
+                            <span class="badge bg-dark me-2">Ana Admin</span>
+                            <strong>Super Admin (Tüm Anketler)</strong>
+                            <div class="text-muted small mt-1">
+                                hasPermission=true · userTypeId=0 · Sistemdeki Hepsini Görür
+                            </div>
+                        </div>
+                    </label>
+
+                    <label class="d-flex align-items-center gap-0">
+                        <input type="radio" name="role" value="Admin" class="d-none" id="r_admin" />
                         <div class="role-card w-100" onclick="document.getElementById('r_admin').click()">
-                            <span class="badge bg-danger me-2">Admin</span>
+                            <span class="badge bg-danger me-2">Fakülte Admin</span>
                             <strong>Admin (Personel + Yönetici)</strong>
                             <div class="text-muted small mt-1">
                                 hasPermission=true · userTypeId=0 · Admin Paneli erişimi
@@ -93,7 +104,7 @@
             if (this.checked) this.nextElementSibling.style.borderColor = '#e94560';
         });
     });
-    document.getElementById('r_admin').dispatchEvent(new Event('change'));
+    document.getElementById('r_superadmin').dispatchEvent(new Event('change'));
 </script>
 </body>
 </html>

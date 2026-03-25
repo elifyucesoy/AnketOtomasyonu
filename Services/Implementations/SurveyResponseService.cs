@@ -1,4 +1,4 @@
-﻿using AnketOtomasyonu.Data;
+using AnketOtomasyonu.Data;
 using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Services.Interfaces;
@@ -71,12 +71,17 @@ namespace AnketOtomasyonu.Services.Implementations
                 .Select(q => q.Id).ToList();
 
             var answeredIds = dto.Answers
-                .Where(a => a.SelectedOptionId.HasValue
-                    || !string.IsNullOrWhiteSpace(a.OpenEndedAnswer))
-                .Select(a => a.QuestionId).ToList();
+                .Where(a => a.SelectedOptionId.HasValue || !string.IsNullOrWhiteSpace(a.OpenEndedAnswer))
+                .Select(a => a.QuestionId)
+                .Distinct()
+                .ToList();
 
-            if (requiredIds.Except(answeredIds).Any())
+            var missingRequiredIds = requiredIds.Except(answeredIds).ToList();
+
+            if (missingRequiredIds.Any())
+            {
                 return (false, "Lütfen zorunlu (*) soruları cevaplayınız.");
+            }
 
             var response = new SurveyResponse
             {

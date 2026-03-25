@@ -11,9 +11,10 @@
 
     <style>
         :root {
-            --admin-dark: #1a1a2e;
-            --admin-accent: #e94560;
-            --admin-light: #f0f0f3;
+            --admin-navy:   #1B2A4A;
+            --admin-navy2:  #142038;
+            --admin-yellow: #F9BC00;
+            --admin-light:  #f0f4f8;
         }
 
         body {
@@ -24,12 +25,13 @@
             flex-direction: column;
         }
 
+        /* NAVBAR */
         .navbar-admin {
-            background: var(--admin-dark) !important;
+            background: var(--admin-navy) !important;
         }
 
         .navbar-admin .navbar-brand {
-            color: var(--admin-accent) !important;
+            color: var(--admin-yellow) !important;
             font-weight: 700;
         }
 
@@ -39,26 +41,28 @@
         }
 
         .navbar-admin .nav-link:hover {
-            color: var(--admin-accent) !important;
+            color: var(--admin-yellow) !important;
         }
 
+        /* BUTTONS */
         .btn-admin {
-            background: var(--admin-accent);
-            color: #fff;
-            font-weight: 600;
+            background: var(--admin-yellow);
+            color: var(--admin-navy);
+            font-weight: 700;
             border: none;
             border-radius: 25px;
             padding: 8px 24px;
         }
 
         .btn-admin:hover {
-            background: #c73650;
-            color: #fff;
+            background: #e0ab00;
+            color: var(--admin-navy);
         }
 
+        /* FOOTER */
         .footer-admin {
-            background: var(--admin-dark);
-            color: #666;
+            background: var(--admin-navy2);
+            color: rgba(255,255,255,.4);
             padding: 20px 0;
             margin-top: auto;
         }

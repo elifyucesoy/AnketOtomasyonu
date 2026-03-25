@@ -1,9 +1,9 @@
-﻿using AnketOtomasyonu.Authorization;
-using AnketOtomasyonu.Models.Entities;
+﻿using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
 {
@@ -11,23 +11,21 @@ namespace AnketOtomasyonu.Controllers
     public class SurveyController : Controller
     {
         private readonly ISurveyService _surveyService;
-        private readonly IAuthServiceHandler _authHandler;
 
-        public SurveyController(ISurveyService surveyService, IAuthServiceHandler authHandler)
+        public SurveyController(ISurveyService surveyService)
         {
             _surveyService = surveyService;
-            _authHandler = authHandler;
         }
 
         // Anket Listesi — giriş yapan adminin kendi anketleri
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            var currentUser = await _authHandler.GetCurrentUser();
-            if (currentUser == null)
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
                 return RedirectToAction("Login", "Auth");
 
-            var surveys = await _surveyService.GetSurveysByCreatorAsync(currentUser.Id.ToString());
+            var surveys = await _surveyService.GetSurveysByCreatorAsync(userId);
             return View(surveys);
         }
 
