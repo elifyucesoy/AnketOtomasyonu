@@ -1,4 +1,4 @@
-﻿using AnketOtomasyonu.Data;
+using AnketOtomasyonu.Data;
 using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Services.Interfaces;
@@ -37,11 +37,9 @@ namespace AnketOtomasyonu.Services.Implementations
 
         public async Task<IEnumerable<Survey>> GetActiveSurveysAsync()
         {
-            var now = DateTime.UtcNow;
+            // Debug: Şimdilik tarih kısıtlamasını kaldıralım, sadece Status=Active olanları çekelim
             return await _context.Surveys
-                .Where(s => s.Status == SurveyStatus.Active
-                    && (s.StartDate == null || s.StartDate <= now)
-                    && (s.EndDate == null || s.EndDate >= now))
+                .Where(s => s.Status == SurveyStatus.Active)
                 .Include(s => s.Questions)
                 .Include(s => s.Responses)
                 .OrderByDescending(s => s.CreatedAt)
@@ -50,7 +48,7 @@ namespace AnketOtomasyonu.Services.Implementations
 
         public async Task<IEnumerable<Survey>> GetActiveAnonymousSurveysAsync()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
             return await _context.Surveys
                 .Where(s => s.Status == SurveyStatus.Active
                     && s.IsAnonymous
@@ -72,8 +70,18 @@ namespace AnketOtomasyonu.Services.Implementations
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<Survey>> GetSurveysByBirimAsync(string birim)
+        {
+            return await _context.Surveys
+                .Where(s => s.CreatedByBirim == birim)
+                .Include(s => s.Questions)
+                .Include(s => s.Responses)
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+        }
+
         public async Task<Survey> CreateSurveyAsync(
-            SurveyCreateDto dto, string creatorUserId, string creatorName)
+            SurveyCreateDto dto, string creatorUserId, string creatorName, string? creatorBirim = null)
         {
             var survey = new Survey
             {
@@ -83,8 +91,11 @@ namespace AnketOtomasyonu.Services.Implementations
                 StartDate = dto.StartDate,
                 EndDate = dto.EndDate,
                 TargetRoles = string.Join(",", dto.TargetRoles),
+                TargetFaculties = dto.TargetFaculties.Any() ? string.Join(",", dto.TargetFaculties) : null,
+                TargetDepartments = dto.TargetDepartments.Any() ? string.Join(",", dto.TargetDepartments) : null,
                 CreatedByUserId = creatorUserId,
                 CreatedByName = creatorName,
+                CreatedByBirim = creatorBirim,
                 Status = SurveyStatus.Draft,
                 CreatedAt = DateTime.UtcNow
             };

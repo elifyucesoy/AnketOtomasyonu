@@ -7,7 +7,16 @@ namespace AnketOtomasyonu.Models.DTOs
         public int SurveyId { get; set; }
         public string Title { get; set; } = string.Empty;
         public int TotalResponses { get; set; }
+        public List<RespondentInfoDto> Respondents { get; set; } = new();
         public List<QuestionResultDto> Questions { get; set; } = new();
+    }
+
+    public class RespondentInfoDto
+    {
+        public string? UserFullName { get; set; }
+        public string? FakulteAdi { get; set; }
+        public string? BolumAdi { get; set; }
+        public DateTime SubmittedAt { get; set; }
     }
 
     public class QuestionResultDto

@@ -4,6 +4,7 @@ using AnketOtomasyonu.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AnketOtomasyonu.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260328175127_SuperAdminOnaylamaSistemi")]
+    partial class SuperAdminOnaylamaSistemi
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -165,12 +168,6 @@ namespace AnketOtomasyonu.Migrations
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
-
-                    b.Property<string>("TargetDepartments")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("TargetFaculties")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TargetRoles")
                         .IsRequired()

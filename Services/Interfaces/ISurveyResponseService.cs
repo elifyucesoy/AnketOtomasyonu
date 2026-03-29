@@ -10,7 +10,8 @@ namespace AnketOtomasyonu.Services.Interfaces
         Task<SurveyResultDto> GetSurveyResultsAsync(int surveyId);
         Task<bool> HasUserRespondedAsync(int surveyId, string userId);
         Task<(bool success, string message)> SubmitResponseAsync(
-            SurveySubmitDto dto, string userId, string? ipAddress);
+            SurveySubmitDto dto, string userId, string? ipAddress,
+            string? userFullName = null, string? fakulteAdi = null, string? bolumAdi = null);
         
     }
 }

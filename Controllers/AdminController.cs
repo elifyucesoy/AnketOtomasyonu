@@ -8,18 +8,21 @@ using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
 {
-    //[Authorize(Policy = "ANKET_API_ADMIN")]
+    [Authorize(Policy = "ANKET_API_ADMIN")]
     public class AdminController : Controller
     {
         private readonly ISurveyService _surveyService;
         private readonly ISurveyResponseService _responseService;
+        private readonly IBirimService _birimService;
 
         public AdminController(
             ISurveyService surveyService,
-            ISurveyResponseService responseService)
+            ISurveyResponseService responseService,
+            IBirimService birimService)
         {
             _surveyService = surveyService;
             _responseService = responseService;
+            _birimService = birimService;
         }
 
         private async Task<bool> CheckOwnershipAsync(int surveyId)
@@ -28,8 +31,16 @@ namespace AnketOtomasyonu.Controllers
             if (userRole == "SuperAdmin") return true;
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var personelBirim = User.FindFirstValue("PersonelBirim");
             var survey = await _surveyService.GetSurveyWithQuestionsAsync(surveyId);
-            return survey != null && survey.CreatedByUserId == userId;
+            if (survey == null) return false;
+
+            // Admin kendi birimi ile eşleşen anketleri yönetebilir
+            if (!string.IsNullOrEmpty(personelBirim) && survey.CreatedByBirim == personelBirim)
+                return true;
+
+            // Geriye uyumluluk: CreatedByBirim olmayan eski anketlerde userId kontrolü
+            return survey.CreatedByUserId == userId;
         }
 
         [HttpGet]
@@ -37,11 +48,19 @@ namespace AnketOtomasyonu.Controllers
         {
             var userRole = User.FindFirstValue(ClaimTypes.Role);
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0";
+            var personelBirim = User.FindFirstValue("PersonelBirim");
 
             List<Survey> all;
             if (userRole == "SuperAdmin")
             {
                 all = (await _surveyService.GetAllSurveysAsync()).ToList();
+            }
+            else if (!string.IsNullOrEmpty(personelBirim))
+            {
+                // Normal Admin: birime göre filtrele + kendi oluşturduklarını da ekle
+                var birimSurveys = (await _surveyService.GetSurveysByBirimAsync(personelBirim)).ToList();
+                var ownSurveys = (await _surveyService.GetSurveysByCreatorAsync(userId)).ToList();
+                all = birimSurveys.UnionBy(ownSurveys, s => s.Id).OrderByDescending(s => s.CreatedAt).ToList();
             }
             else
             {
@@ -59,26 +78,29 @@ namespace AnketOtomasyonu.Controllers
                 {
                     Id = s.Id,
                     Title = s.Title,
-                    IsAnonymous =s.IsAnonymous,
+                    IsAnonymous = s.IsAnonymous,
                     Status = s.Status switch
                     {
-                        SurveyStatus.Active => "Aktif",
-                        SurveyStatus.Draft => "Taslak",
+                        SurveyStatus.Active   => "Aktif",
+                        SurveyStatus.Draft    => "Taslak",
                         SurveyStatus.Inactive => "Pasif",
-                        SurveyStatus.Closed => "Kapalı",
+                        SurveyStatus.Closed   => "Kapalı",
                         _ => "Bilinmiyor"
                     },
                     StatusBadgeClass = s.Status switch
                     {
-                        SurveyStatus.Active => "bg-success",
-                        SurveyStatus.Draft => "bg-warning text-dark",
+                        SurveyStatus.Active   => "bg-success",
+                        SurveyStatus.Draft    => "bg-warning text-dark",
                         SurveyStatus.Inactive => "bg-secondary",
                         _ => "bg-danger"
                     },
-                    QuestionCount = s.Questions.Count,
-                    ResponseCount = s.Responses.Count,
-                    CreatedByName = s.CreatedByName,
-                    CreatedAt = s.CreatedAt
+                    QuestionCount  = s.Questions.Count,
+                    ResponseCount  = s.Responses.Count,
+                    CreatedByName  = s.CreatedByName,
+                    CreatedByBirim = s.CreatedByBirim ?? "",
+                    CreatedAt      = s.CreatedAt,
+                    ApprovalStatus = s.ApprovalStatus,
+                    ApprovalNote   = s.ApprovalNote
                 }).ToList()
             };
 
@@ -86,7 +108,12 @@ namespace AnketOtomasyonu.Controllers
         }
 
         [HttpGet]
-        public IActionResult CreateSurvey() => View(new SurveyCreateViewModel());
+        public IActionResult CreateSurvey()
+        {
+            ViewBag.Birimler = _birimService.GetAllNames();
+            ViewBag.AdminBirim = User.FindFirstValue("PersonelBirim");
+            return View(new SurveyCreateViewModel());
+        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -105,8 +132,9 @@ namespace AnketOtomasyonu.Controllers
             // Kullanıcı bilgisi claim'den okunur
             var createdById   = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0";
             var createdByName = User.FindFirstValue(ClaimTypes.Name) ?? "Bilinmiyor";
+            var createdByBirim = User.FindFirstValue("PersonelBirim");
 
-            await _surveyService.CreateSurveyAsync(dto, createdById, createdByName);
+            await _surveyService.CreateSurveyAsync(dto, createdById, createdByName, createdByBirim);
 
             TempData["Success"] = "Anket başarıyla oluşturuldu. Yayınlamak için Yayınla butonuna tıklayın.";
             return RedirectToAction("Dashboard");
@@ -117,6 +145,16 @@ namespace AnketOtomasyonu.Controllers
         public async Task<IActionResult> Publish(int id)
         {
             if (!await CheckOwnershipAsync(id)) return Unauthorized();
+
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+
+            // SuperAdmin doğrudan yayınlayabilir; Admin için onay şart
+            if (userRole != "SuperAdmin" && survey?.ApprovalStatus != Models.Entities.ApprovalStatus.Approved)
+            {
+                TempData["Error"] = "Bu anket henüz SuperAdmin tarafından onaylanmadı. Onaylanmadan yayınlanamaz.";
+                return RedirectToAction("Dashboard");
+            }
 
             await _surveyService.PublishSurveyAsync(id);
             TempData["Success"] = "Anket yayınlandı! Artık öğrenciler görebilir.";
@@ -155,6 +193,8 @@ namespace AnketOtomasyonu.Controllers
                 EndDate = survey.EndDate,
             };
 
+            ViewBag.Birimler = _birimService.GetAllNames();
+            ViewBag.AdminBirim = User.FindFirstValue("PersonelBirim");
             ViewBag.SurveyId = survey.Id;
             ViewBag.SurveyStatus = survey.Status;
             ViewBag.ExistingQuestions = survey.Questions
@@ -201,9 +241,29 @@ namespace AnketOtomasyonu.Controllers
         {
             if (!await CheckOwnershipAsync(id)) return Unauthorized();
 
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+
+            if (userRole != "SuperAdmin" && survey?.ApprovalStatus != Models.Entities.ApprovalStatus.Approved)
+            {
+                TempData["Error"] = "Bu anket henüz SuperAdmin tarafından onaylanmadı.";
+                return RedirectToAction("Dashboard");
+            }
+
             await _surveyService.PublishSurveyAsync(id);
             TempData["Success"] = "Anket tekrar yayınlandı!";
             return RedirectToAction("Dashboard");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> PreviewSurvey(int id)
+        {
+            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+
+            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+            if (survey == null) return NotFound();
+
+            return View(survey);
         }
 
         [HttpGet]

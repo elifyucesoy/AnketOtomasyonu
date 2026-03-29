@@ -1,7 +1,9 @@
 @using AnketOtomasyonu.Models.ViewModels
+@using AnketOtomasyonu.Models.Entities
 @model AdminDashboardViewModel
 @{
     ViewData["Title"] = "Yönetim Paneli";
+    var isSuperAdmin = User.IsInRole("SuperAdmin");
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -63,6 +65,7 @@
                             <th>Anket Adı</th>
                             <th>Tür</th>
                             <th>Durum</th>
+                            <th>Onay</th>
                             <th>Soru</th>
                             <th>Yanıt</th>
                             <th>Oluşturan</th>
@@ -74,9 +77,7 @@
                         @foreach (var s in Model.RecentSurveys)
                         {
                             <tr>
-                                <td class="fw-semibold">
-                                    @s.Title
-                                </td>
+                                <td class="fw-semibold">@s.Title</td>
                                 <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
                                 <td>
                                     @if (s.IsAnonymous)
@@ -88,6 +89,24 @@
                                         <span class="badge bg-warning text-dark">Giriş Gerekli</span>
                                     }
                                 </td>
+                                <td>
+                                    @if (isSuperAdmin)
+                                    {
+                                        <span class="badge @s.ApprovalBadgeClass" title="@s.ApprovalNote">
+                                            @s.ApprovalLabel
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge @s.ApprovalBadgeClass" title="@s.ApprovalNote">
+                                            @s.ApprovalLabel
+                                        </span>
+                                        @if (s.ApprovalStatus == ApprovalStatus.Rejected && !string.IsNullOrEmpty(s.ApprovalNote))
+                                        {
+                                            <br /><small class="text-danger">@s.ApprovalNote</small>
+                                        }
+                                    }
+                                </td>
                                 <td>@s.QuestionCount</td>
                                 <td>@s.ResponseCount</td>
                                 <td class="text-muted small">@s.CreatedByName</td>
@@ -95,17 +114,13 @@
                                 <td class="text-end">
                                     <div class="d-flex gap-1 justify-content-end">
 
-                                        <!-- İNCELE (sadece aktif anketler) -->
-                                        @if (s.Status == "Aktif")
-                                        {
-                                            <a asp-controller="Survey"
-                                               asp-action="Detail"
-                                               asp-route-id="@s.Id"
-                                               class="btn btn-sm btn-outline-dark"
-                                               title="İncele">
-                                                <i class="bi bi-eye"></i>
-                                            </a>
-                                        }
+                                        <!-- ÖNİZLE -->
+                                        <a asp-action="PreviewSurvey"
+                                           asp-route-id="@s.Id"
+                                           class="btn btn-sm btn-outline-primary"
+                                           title="Anketi Önizle">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
 
                                         <!-- ANKET URL KOPYALA -->
                                         @if (s.Status == "Aktif")
@@ -140,33 +155,54 @@
                                         <!-- YAYINLA / TEKRAR YAYINLA -->
                                         @if (s.Status == "Taslak" || s.Status == "Pasif")
                                         {
-                                            <form asp-action="Publish"
-                                                  asp-route-id="@s.Id"
-                                                  method="post"
-                                                  style="display:inline;">
-                                                @Html.AntiForgeryToken()
-                                                <button type="submit"
-                                                        class="btn btn-sm btn-success"
-                                                        title="Yayınla"
-                                                        onclick="return confirm('Anket yayınlansın mı?')">
-                                                    <i class="bi bi-broadcast"></i>
-                                                </button>
-                                            </form>
+                                            @if (isSuperAdmin || s.ApprovalStatus == ApprovalStatus.Approved)
+                                            {
+                                                <form asp-action="Publish"
+                                                      asp-route-id="@s.Id"
+                                                      method="post"
+                                                      style="display:inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit"
+                                                            class="btn btn-sm btn-success"
+                                                            title="Yayınla"
+                                                            onclick="return confirm('Anket yayınlansın mı?')">
+                                                        <i class="bi bi-broadcast"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                            else if (s.ApprovalStatus == ApprovalStatus.Rejected)
+                                            {
+                                                <span class="btn btn-sm btn-danger" disabled
+                                                      title="@("Reddedildi: " + (s.ApprovalNote ?? ""))">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <!-- Pending: onay kuyruğunda, net bilgi ver -->
+                                                <span class="btn btn-sm btn-outline-warning"
+                                                      title="Anket SuperAdmin onay kuyruğuna gönderildi, bekleniyor">
+                                                    <i class="bi bi-hourglass-split"></i>
+                                                </span>
+                                            }
                                         }
                                         @if (s.Status == "Kapalı")
                                         {
-                                            <form asp-action="Republish"
-                                                  asp-route-id="@s.Id"
-                                                  method="post"
-                                                  style="display:inline;">
-                                                @Html.AntiForgeryToken()
-                                                <button type="submit"
-                                                        class="btn btn-sm btn-success"
-                                                        title="Tekrar Yayınla"
-                                                        onclick="return confirm('Anket tekrar yayınlansın mı?')">
-                                                    <i class="bi bi-arrow-repeat"></i>
-                                                </button>
-                                            </form>
+                                            @if (isSuperAdmin || s.ApprovalStatus == ApprovalStatus.Approved)
+                                            {
+                                                <form asp-action="Republish"
+                                                      asp-route-id="@s.Id"
+                                                      method="post"
+                                                      style="display:inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit"
+                                                            class="btn btn-sm btn-success"
+                                                            title="Tekrar Yayınla"
+                                                            onclick="return confirm('Anket tekrar yayınlansın mı?')">
+                                                        <i class="bi bi-arrow-repeat"></i>
+                                                    </button>
+                                                </form>
+                                            }
                                         }
 
                                         <!-- KAPAT -->

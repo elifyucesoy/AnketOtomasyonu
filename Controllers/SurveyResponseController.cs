@@ -65,7 +65,7 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction("NotFound_", "SurveyResponse");
             }
 
-            if (survey.Status != SurveyStatus.Active)
+            if (survey.Status != SurveyStatus.Active && !User.IsInRole("SuperAdmin"))
             {
                 TempData["Error"] = "Bu anket aktif değil.";
                 if (survey.IsAnonymous)
@@ -93,6 +93,12 @@ namespace AnketOtomasyonu.Controllers
                     return RedirectToAction("Login", "Auth", new { returnUrl });
                 }
 
+                if (User.IsInRole("Akademik"))
+                {
+                    TempData["Error"] = "Akademik personel anket dolduramaz, sadece sonuçları görüntüleyebilir.";
+                    return RedirectToAction("NotFound_", "SurveyResponse");
+                }
+
                 // ── KULLANICI TİPİ KONTROLÜ ──
                 var userType = User.FindFirstValue("UserTypeId") == "0" ? "Employee" : "Student";
                 if (!string.IsNullOrEmpty(survey.TargetRoles) && !string.IsNullOrEmpty(userType))
@@ -103,6 +109,59 @@ namespace AnketOtomasyonu.Controllers
                     {
                         TempData["Error"] = "Bu anket sizin kullanıcı tipinize açık değildir.";
                         return RedirectToAction("NotFound_", "SurveyResponse");
+                    }
+                }
+
+                // ── YENİ HEDEFLEME KONTROLLERİ (Fakülte/Birim ve Bölüm) ──
+                
+                // 1. Hedef Fakülteler/Birimler Kontrolü
+                var userBirim = (userType == "Employee") 
+                    ? User.FindFirstValue("PersonelBirim") 
+                    : User.FindFirstValue("FakulteAdi");
+
+                bool birimMatch = false;
+
+                // Creator match? (MERKEZ ise herkese açık, değilse sadece oluşturan birime)
+                if (string.Equals(survey.CreatedByBirim, "MERKEZ", StringComparison.OrdinalIgnoreCase))
+                {
+                    birimMatch = true;
+                }
+                else if (!string.IsNullOrEmpty(userBirim) && string.Equals(survey.CreatedByBirim, userBirim, StringComparison.OrdinalIgnoreCase))
+                {
+                    birimMatch = true;
+                }
+
+                // Explicit target match?
+                if (!birimMatch && !string.IsNullOrEmpty(survey.TargetFaculties))
+                {
+                    var targetsCount = survey.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (!string.IsNullOrEmpty(userBirim) && targetsCount.Contains(userBirim, StringComparer.OrdinalIgnoreCase))
+                    {
+                        birimMatch = true;
+                    }
+                }
+
+                if (!birimMatch)
+                {
+                    TempData["Error"] = "Bu anket sizin biriminize/fakültenize yönelik değildir.";
+                    return RedirectToAction("NotFound_", "SurveyResponse");
+                }
+
+                // 2. Hedef Bölümler Kontrolü
+                if (!string.IsNullOrEmpty(survey.TargetDepartments))
+                {
+                    var targets = survey.TargetDepartments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    var userBolum = (userType == "Employee")
+                        ? User.FindFirstValue("JobTitle") // Personel için unvan veya ek bir alan da olabilir ama genelde Fakülte yeterli
+                        : User.FindFirstValue("BolumAdi");
+
+                    if (userType == "Student") // Bölüm kontrolü genelde öğrenciler için kritik
+                    {
+                        if (string.IsNullOrEmpty(userBolum) || !targets.Contains(userBolum, StringComparer.OrdinalIgnoreCase))
+                        {
+                            TempData["Error"] = "Bu anket okuduğunuz bölüme açık değildir.";
+                            return RedirectToAction("NotFound_", "SurveyResponse");
+                        }
                     }
                 }
 
@@ -170,6 +229,14 @@ namespace AnketOtomasyonu.Controllers
                     return RedirectToAction("Login", "Auth", new { returnUrl });
                 }
 
+                userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+                if (User.IsInRole("Akademik"))
+                {
+                    TempData["Error"] = "Akademik personel anket dolduramaz, sadece sonuçları görüntüleyebilir.";
+                    return RedirectToAction("NotFound_", "SurveyResponse");
+                }
+
                 var userType = User.FindFirstValue("UserTypeId") == "0" ? "Employee" : "Student";
                 if (!string.IsNullOrEmpty(survey.TargetRoles) && !string.IsNullOrEmpty(userType))
                 {
@@ -182,11 +249,73 @@ namespace AnketOtomasyonu.Controllers
                     }
                 }
 
-                userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                // ── YENİ HEDEFLEME KONTROLLERİ (Fakülte/Birim ve Bölüm) ──
+                
+                // 1. Hedef Fakülteler/Birimler Kontrolü
+                var userBirim = (userType == "Employee") 
+                    ? User.FindFirstValue("PersonelBirim") 
+                    : User.FindFirstValue("FakulteAdi");
+
+                bool birimMatch = false;
+
+                // Creator match? (MERKEZ ise herkese açık, değilse sadece oluşturan birime)
+                if (string.Equals(survey.CreatedByBirim, "MERKEZ", StringComparison.OrdinalIgnoreCase))
+                {
+                    birimMatch = true;
+                }
+                else if (!string.IsNullOrEmpty(userBirim) && string.Equals(survey.CreatedByBirim, userBirim, StringComparison.OrdinalIgnoreCase))
+                {
+                    birimMatch = true;
+                }
+
+                // Explicit target match?
+                if (!birimMatch && !string.IsNullOrEmpty(survey.TargetFaculties))
+                {
+                    var targetsCount = survey.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (!string.IsNullOrEmpty(userBirim) && targetsCount.Contains(userBirim, StringComparer.OrdinalIgnoreCase))
+                    {
+                        birimMatch = true;
+                    }
+                }
+
+                if (!birimMatch)
+                {
+                    TempData["Error"] = "Bu anket sizin biriminize/fakültenize yönelik değildir.";
+                    return RedirectToAction("NotFound_", "SurveyResponse");
+                }
+
+                // 2. Hedef Bölümler Kontrolü
+                if (!string.IsNullOrEmpty(survey.TargetDepartments))
+                {
+                    var targets = survey.TargetDepartments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    var userBolum = (userType == "Employee")
+                        ? User.FindFirstValue("JobTitle")
+                        : User.FindFirstValue("BolumAdi");
+
+                    if (userType == "Student")
+                    {
+                        if (string.IsNullOrEmpty(userBolum) || !targets.Contains(userBolum, StringComparer.OrdinalIgnoreCase))
+                        {
+                            TempData["Error"] = "Bu anket okuduğunuz bölüme açık değildir.";
+                            return RedirectToAction("NotFound_", "SurveyResponse");
+                        }
+                    }
+                }
+
+                if (await _responseService.HasUserRespondedAsync(dto.SurveyId, userId!))
+                {
+                    TempData["Error"] = "Bu anketi zaten doldurdunuz.";
+                    return RedirectToAction("Index", "Home");
+                }
             }
 
+            // Demografik bilgileri claim'lerden oku
+            var userFullName = User.FindFirstValue(ClaimTypes.Name);
+            var fakulteAdi = User.FindFirstValue("FakulteAdi");
+            var bolumAdi = User.FindFirstValue("BolumAdi");
+
             var (success, message) =
-                await _responseService.SubmitResponseAsync(dto, userId, ip);
+                await _responseService.SubmitResponseAsync(dto, userId, ip, userFullName, fakulteAdi, bolumAdi);
 
             if (!success)
             {

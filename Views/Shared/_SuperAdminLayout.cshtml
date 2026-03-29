@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Admin Paneli</title>
+    <title>@ViewData["Title"] - SuperAdmin Paneli</title>
 
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" />
@@ -11,61 +11,85 @@
 
     <style>
         :root {
-            --admin-navy:   #1B2A4A;
-            --admin-navy2:  #142038;
-            --admin-yellow: #F9BC00;
-            --admin-light:  #f0f4f8;
+            --sa-dark:   #0f172a;
+            --sa-dark2:  #0a0f1e;
+            --sa-purple: #7c3aed;
+            --sa-purple2:#6d28d9;
+            --sa-gold:   #f59e0b;
+            --sa-light:  #f1f5f9;
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, sans-serif;
-            background: var(--admin-light);
+            background: var(--sa-light);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
 
-        /* NAVBAR */
-        .navbar-admin {
-            background: var(--admin-navy) !important;
+        .navbar-sa {
+            background: var(--sa-dark) !important;
+            border-bottom: 3px solid var(--sa-purple);
         }
 
-        .navbar-admin .navbar-brand {
-            color: var(--admin-yellow) !important;
-            font-weight: 700;
+        .navbar-sa .navbar-brand {
+            color: var(--sa-gold) !important;
+            font-weight: 800;
+            letter-spacing: 0.5px;
         }
 
-        .navbar-admin .nav-link {
+        .navbar-sa .nav-link {
             color: rgba(255,255,255,.85) !important;
             font-weight: 500;
+            transition: color .2s;
         }
 
-        .navbar-admin .nav-link:hover {
-            color: var(--admin-yellow) !important;
+        .navbar-sa .nav-link:hover,
+        .navbar-sa .nav-link.active {
+            color: var(--sa-gold) !important;
         }
 
-        /* BUTTONS */
-        .btn-admin {
-            background: var(--admin-yellow);
-            color: var(--admin-navy);
+        .sa-badge {
+            background: var(--sa-purple);
+            color: #fff;
+            font-size: .65rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 20px;
+            vertical-align: middle;
+            margin-left: 4px;
+        }
+
+        .btn-sa {
+            background: var(--sa-purple);
+            color: #fff;
             font-weight: 700;
             border: none;
             border-radius: 25px;
             padding: 8px 24px;
+            transition: background .2s;
         }
 
-        .btn-admin:hover {
-            background: #e0ab00;
-            color: var(--admin-navy);
+        .btn-sa:hover {
+            background: var(--sa-purple2);
+            color: #fff;
         }
 
-        /* FOOTER */
-        .footer-admin {
-            background: var(--admin-navy2);
-            color: rgba(255,255,255,.4);
-            padding: 20px 0;
+        .footer-sa {
+            background: var(--sa-dark2);
+            color: rgba(255,255,255,.35);
+            padding: 18px 0;
             margin-top: auto;
         }
+
+        .stat-card {
+            border: none;
+            border-radius: 14px;
+            box-shadow: 0 2px 12px rgba(0,0,0,.08);
+            transition: transform .15s;
+        }
+
+        .stat-card:hover { transform: translateY(-3px); }
 
         main { flex: 1; }
     </style>
@@ -75,40 +99,41 @@
 
 <body>
     <header>
-        <nav class="navbar navbar-expand-lg navbar-admin shadow-sm">
+        <nav class="navbar navbar-expand-lg navbar-sa shadow">
             <div class="container">
-                <a class="navbar-brand" asp-controller="Admin" asp-action="Dashboard">
-                    <i class="bi bi-shield-lock me-2"></i>Admin Paneli
+                <a class="navbar-brand" asp-controller="SuperAdmin" asp-action="Dashboard">
+                    <i class="bi bi-shield-fill-check me-2"></i>SuperAdmin
+                    <span class="sa-badge">ROOT</span>
                 </a>
-                <button class="navbar-toggler" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#adminNavbar"
-                        aria-controls="adminNavbar" aria-expanded="false" aria-label="Menü">
+
+                <button class="navbar-toggler border-secondary" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#saNavbar"
+                        aria-controls="saNavbar" aria-expanded="false" aria-label="Menü">
                     <span class="navbar-toggler-icon"></span>
                 </button>
 
-                <div class="collapse navbar-collapse" id="adminNavbar">
-                    <ul class="navbar-nav me-auto">
+                <div class="collapse navbar-collapse" id="saNavbar">
+                    <ul class="navbar-nav me-auto gap-1">
                         <li class="nav-item">
-                            <a class="nav-link" asp-controller="Admin" asp-action="Dashboard">
+                            <a class="nav-link" asp-controller="SuperAdmin" asp-action="Dashboard">
                                 <i class="bi bi-speedometer2 me-1"></i>Dashboard
                             </a>
                         </li>
-                        @if (!User.IsInRole("SuperAdmin"))
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link" asp-controller="Admin" asp-action="CreateSurvey">
-                                    <i class="bi bi-plus-circle me-1"></i>Yeni Anket
-                                </a>
-                            </li>
-                        }
-                        @if (User.IsInRole("SuperAdmin"))
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link text-warning fw-bold" asp-controller="SuperAdmin" asp-action="Dashboard">
-                                    <i class="bi bi-shield-fill-check me-1"></i>SuperAdmin Paneli
-                                </a>
-                            </li>
-                        }
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="SuperAdmin" asp-action="SurveyApprovals">
+                                <i class="bi bi-check2-circle me-1"></i>Anket Onayları
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="SuperAdmin" asp-action="AllResults">
+                                <i class="bi bi-bar-chart-line me-1"></i>Sonuçlar
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="SuperAdmin" asp-action="AdminManagement">
+                                <i class="bi bi-people-fill me-1"></i>Admin Yönetimi
+                            </a>
+                        </li>
                         <li class="nav-item">
                             <a class="nav-link" asp-controller="Home" asp-action="Index">
                                 <i class="bi bi-box-arrow-up-left me-1"></i>Siteye Dön
@@ -116,13 +141,12 @@
                         </li>
                     </ul>
 
-                    <!-- Kullanıcı dropdown -->
                     <ul class="navbar-nav">
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button"
                                data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-person-circle me-1"></i>
-                                @(User.Identity?.Name ?? "Admin")
+                                <i class="bi bi-person-badge-fill me-1" style="color:var(--sa-gold);"></i>
+                                <span style="color:var(--sa-gold);font-weight:700;">SuperAdmin</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li>
@@ -167,9 +191,9 @@
         </main>
     </div>
 
-    <footer class="footer-admin">
+    <footer class="footer-sa">
         <div class="container text-center">
-            &copy; @DateTime.Now.Year - AnketOtomasyonu Admin
+            &copy; @DateTime.Now.Year — AnketOtomasyonu SuperAdmin Paneli
         </div>
     </footer>
 

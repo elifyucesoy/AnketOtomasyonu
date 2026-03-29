@@ -32,7 +32,8 @@ namespace AnketOtomasyonu.Services.Implementations
         }
 
         public async Task<(bool success, string message)> SubmitResponseAsync(
-            SurveySubmitDto dto, string userId, string? ipAddress)
+            SurveySubmitDto dto, string userId, string? ipAddress,
+            string? userFullName = null, string? fakulteAdi = null, string? bolumAdi = null)
         {
             var survey = await _context.Surveys
                 .Include(s => s.Questions)
@@ -93,6 +94,9 @@ namespace AnketOtomasyonu.Services.Implementations
                     : userId,
                 SubmittedAt = DateTime.UtcNow,
                 IpAddress = ipAddress,
+                UserFullName = userFullName,
+                FakulteAdi = fakulteAdi,
+                BolumAdi = bolumAdi,
                 Answers = dto.Answers.Select(a => new SurveyAnswer
                 {
                     QuestionId = a.QuestionId,
@@ -125,6 +129,13 @@ namespace AnketOtomasyonu.Services.Implementations
                 SurveyId = survey.Id,
                 Title = survey.Title,
                 TotalResponses = survey.Responses.Count,
+                Respondents = survey.Responses.Select(r => new RespondentInfoDto
+                {
+                    UserFullName = r.UserFullName,
+                    FakulteAdi = r.FakulteAdi,
+                    BolumAdi = r.BolumAdi,
+                    SubmittedAt = r.SubmittedAt
+                }).OrderByDescending(r => r.SubmittedAt).ToList(),
                 Questions = survey.Questions.Select(q =>
                 {
                     var answers = survey.Responses

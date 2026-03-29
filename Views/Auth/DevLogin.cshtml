@@ -60,12 +60,23 @@
                     </label>
 
                     <label class="d-flex align-items-center gap-0">
-                        <input type="radio" name="role" value="Employee" class="d-none" id="r_employee" />
-                        <div class="role-card w-100" onclick="document.getElementById('r_employee').click()">
-                            <span class="badge bg-success me-2">Personel</span>
-                            <strong>Employee (Personel)</strong>
+                        <input type="radio" name="role" value="AkademikEmployee" class="d-none" id="r_akademik" />
+                        <div class="role-card w-100" onclick="document.getElementById('r_akademik').click()">
+                            <span class="badge bg-info text-dark me-2">Akademik</span>
+                            <strong>Akademik Personel (Admin değil)</strong>
                             <div class="text-muted small mt-1">
-                                hasPermission=false · userTypeId=0 · ANKET_API_STUDENT erişimi
+                                JobRecordType=Akademik · AdminPermissions'da YOK · Anket doldurabilir
+                            </div>
+                        </div>
+                    </label>
+
+                    <label class="d-flex align-items-center gap-0">
+                        <input type="radio" name="role" value="Idari" class="d-none" id="r_idari" />
+                        <div class="role-card w-100" onclick="document.getElementById('r_idari').click()">
+                            <span class="badge bg-success me-2">İdari</span>
+                            <strong>İdari Personel</strong>
+                            <div class="text-muted small mt-1">
+                                JobRecordType=İdari · Sadece Employee anketlerini doldurabilir
                             </div>
                         </div>
                     </label>
@@ -76,7 +87,7 @@
                             <span class="badge bg-primary me-2">Öğrenci</span>
                             <strong>Student (Öğrenci)</strong>
                             <div class="text-muted small mt-1">
-                                hasPermission=false · userTypeId=1 · ANKET_API_STUDENT erişimi
+                                userTypeId=1 · Fakülte/Bölüm bilgisi ile · ANKET_API_STUDENT erişimi
                             </div>
                         </div>
                     </label>

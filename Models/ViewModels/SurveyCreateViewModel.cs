@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using AnketOtomasyonu.Models.Entities;
 
 namespace AnketOtomasyonu.Models.ViewModels
@@ -27,6 +27,12 @@ namespace AnketOtomasyonu.Models.ViewModels
         [Display(Name = "Bitiş Tarihi")]
         [DataType(DataType.Date)]
         public DateTime? EndDate { get; set; }
+
+        [Display(Name = "Hedef Fakülteler/Birimler")]
+        public List<string> TargetFaculties { get; set; } = new();
+
+        [Display(Name = "Hedef Bölümler")]
+        public List<string> TargetDepartments { get; set; } = new();
 
         public List<QuestionCreateViewModel> Questions { get; set; } = new();
 

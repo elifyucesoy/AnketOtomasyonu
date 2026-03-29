@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace AnketOtomasyonu.Models.DTOs
 {
@@ -17,6 +17,8 @@ namespace AnketOtomasyonu.Models.DTOs
         public bool IsAnonymous { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
+        public List<string> TargetFaculties { get; set; } = new();
+        public List<string> TargetDepartments { get; set; } = new();
 
         public List<QuestionCreateDto> Questions { get; set; } = new();
     }

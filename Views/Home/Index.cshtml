@@ -244,18 +244,43 @@ else
                             }
                         </div>
 
+                        <div class="mb-2">
+                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                                <i class="bi bi-building me-1"></i>@survey.CreatedByBirim
+                            </span>
+                        </div>
+
                         @if (survey.Status == "Aktif")
                         {
                             <a asp-controller="SurveyResponse"
                                asp-action="Fill"
                                asp-route-id="@survey.Id"
-                               class="btn-ankete">
+                               class="btn-ankete mb-2">
                                 Ankete Başla &rarr;
                             </a>
                         }
-                        else
+                        
+                        @if (Model.UserRole == "Admin" || Model.UserRole == "SuperAdmin")
                         {
-                            <span class="btn-ankete-disabled">@survey.Status</span>
+                            var controller = Model.UserRole == "SuperAdmin" ? "SuperAdmin" : "Admin";
+                            <a asp-controller="@controller" asp-action="PreviewSurvey" asp-route-id="@survey.Id" class="btn btn-sm btn-outline-info w-100 mb-1">
+                                <i class="bi bi-eye"></i> Anketi Önizle
+                            </a>
+                        }
+
+                        @if (survey.Status == "Taslak")
+                        {
+                            <span class="badge bg-warning text-dark mb-2">Taslak (Yayında Değil)</span>
+                            @if (Model.UserRole == "Admin" || Model.UserRole == "SuperAdmin")
+                            {
+                                <a asp-controller="Admin" asp-action="EditSurvey" asp-route-id="@survey.Id" class="btn btn-sm btn-outline-secondary w-100">
+                                    Düzenle
+                                </a>
+                            }
+                        }
+                        else if (survey.Status != "Aktif")
+                        {
+                            <span class="btn-ankete-disabled mb-2">@survey.Status</span>
                         }
                     </div>
                 </div>

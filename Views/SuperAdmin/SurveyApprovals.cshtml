@@ -1,0 +1,139 @@
+@using AnketOtomasyonu.Models.Entities
+@using AnketOtomasyonu.Models.ViewModels
+@model SuperAdminDashboardViewModel
+@{
+    ViewData["Title"] = "Anket Onayları";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0"><i class="bi bi-check2-circle me-2" style="color:#7c3aed;"></i>Anket Onay Yönetimi</h2>
+        <small class="text-muted">Admin tarafından oluşturulan ve onay bekleyen anketler</small>
+    </div>
+    <a asp-action="Dashboard" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Dashboard'a Dön
+    </a>
+</div>
+
+<!-- FAKÜLTE FİLTRESİ -->
+@if (Model.AllBirimler.Any())
+{
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body py-3">
+            <form method="get" asp-action="SurveyApprovals" class="d-flex gap-2 align-items-center flex-wrap">
+                <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Fakülte Filtrele:</label>
+                <select name="birim" class="form-select form-select-sm" style="max-width:320px;"
+                        onchange="this.form.submit()">
+                    <option value="">— Tüm Fakülteler —</option>
+                    @foreach (var b in Model.AllBirimler)
+                    {
+                        <option value="@b" selected="@(Model.SelectedBirim == b ? "selected" : null)">@b</option>
+                    }
+                </select>
+                @if (!string.IsNullOrEmpty(Model.SelectedBirim))
+                {
+                    <a asp-action="SurveyApprovals" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-x-circle me-1"></i>Temizle
+                    </a>
+                }
+            </form>
+        </div>
+    </div>
+}
+
+@if (!Model.Surveys.Any())
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-5 text-muted">
+            <i class="bi bi-check2-all" style="font-size:3rem;color:#198754;"></i>
+            <h5 class="mt-3">Onay bekleyen anket yok!</h5>
+            <p class="small">Tüm anketler incelendi.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="alert alert-info d-flex align-items-center gap-2 mb-4">
+        <i class="bi bi-info-circle-fill fs-5"></i>
+        <span><strong>@Model.Surveys.Count</strong> anket onay bekliyor. Onayladığınız anketler otomatik olarak yayınlanır.</span>
+    </div>
+
+    @foreach (var s in Model.Surveys)
+    {
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-7">
+                        <h5 class="mb-1 fw-bold">@s.Title</h5>
+                        <div class="d-flex gap-2 flex-wrap mb-2">
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-building me-1"></i>@s.CreatedByBirim
+                            </span>
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-person me-1"></i>@s.CreatedByName
+                            </span>
+                            <span class="badge @s.StatusBadgeClass">@s.Status</span>
+                            @if (s.IsAnonymous)
+                            {
+                                <span class="badge bg-info">Anonim</span>
+                            }
+                        </div>
+                        <p class="text-muted small mb-0">
+                            <i class="bi bi-calendar me-1"></i>@s.CreatedAt.ToString("dd.MM.yyyy HH:mm")
+                            &nbsp;&bull;&nbsp;
+                            <i class="bi bi-question-circle me-1"></i>@s.QuestionCount soru
+                        </p>
+                    </div>
+                    <div class="col-md-5 mt-3 mt-md-0">
+                        <!-- Onay Formu -->
+                        <div class="border rounded p-3 bg-light">
+                            <label class="form-label fw-semibold small text-muted mb-2">
+                                <i class="bi bi-chat-left-text me-1"></i>Not (isteğe bağlı)
+                            </label>
+                            <input type="text" class="form-control form-control-sm mb-2"
+                                   id="note-@s.Id" placeholder="Onay / ret notu ekleyebilirsiniz..." maxlength="200" />
+                                    <a asp-action="PreviewSurvey" asp-route-id="@s.Id" class="btn btn-outline-primary btn-sm w-100 mb-2">
+                                        <i class="bi bi-eye me-1"></i>Anketi Önizle
+                                    </a>
+                                    <div class="d-flex gap-2">
+                                        <form asp-action="ApproveSurvey" method="post" style="flex:1;"
+                                              onsubmit="setNote(this, @s.Id)">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@s.Id" />
+                                            <input type="hidden" name="note" id="approve-note-@s.Id" />
+                                            <button type="submit" class="btn btn-success btn-sm w-100"
+                                                    onclick="return confirm('Bu anketi onaylayıp yayınlamak istediğinize emin misiniz?')">
+                                                <i class="bi bi-check-lg me-1"></i>Onayla
+                                            </button>
+                                        </form>
+                                        <form asp-action="RejectSurvey" method="post" style="flex:1;"
+                                              onsubmit="setNoteReject(this, @s.Id)">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@s.Id" />
+                                    <input type="hidden" name="note" id="reject-note-@s.Id" />
+                                    <button type="submit" class="btn btn-danger btn-sm w-100"
+                                            onclick="return confirm('Bu anketi reddetmek istediğinize emin misiniz?')">
+                                        <i class="bi bi-x-lg me-1"></i>Reddet
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@section Scripts {
+<script>
+    function setNote(form, id) {
+        var note = document.getElementById('note-' + id).value;
+        document.getElementById('approve-note-' + id).value = note;
+    }
+    function setNoteReject(form, id) {
+        var note = document.getElementById('note-' + id).value;
+        document.getElementById('reject-note-' + id).value = note;
+    }
+</script>
+}

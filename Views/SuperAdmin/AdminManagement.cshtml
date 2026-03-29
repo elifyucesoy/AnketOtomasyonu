@@ -1,0 +1,140 @@
+@using AnketOtomasyonu.Models.ViewModels
+@model AdminManagementViewModel
+@{
+    ViewData["Title"] = "Admin Yönetimi";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0"><i class="bi bi-people-fill me-2" style="color:#7c3aed;"></i>Admin Yönetimi</h2>
+        <small class="text-muted">Fakülteler için admin yetkisi ver / kaldır</small>
+    </div>
+    <a asp-action="Dashboard" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Dashboard
+    </a>
+</div>
+
+<div class="row g-4">
+    <!-- YENİ ADMİN EKLE -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-person-plus-fill me-2" style="color:#7c3aed;"></i>Yeni Admin Ekle</h6>
+            </div>
+            <div class="card-body">
+                <form asp-action="AddAdmin" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Kullanıcı Adı <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" name="username" class="form-control"
+                                   placeholder="ornek_kullanici" required maxlength="100" />
+                        </div>
+                        <div class="form-text">Kurumsal mail adresi (@@'siz, örn: elif_yucesoy)</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Fakülte / Birim <span class="text-danger">*</span></label>
+                        <select name="personelBirim" class="form-select" required>
+                            <option value="">— Birim Seçiniz —</option>
+                            @foreach (var b in Model.AllBirimler)
+                            {
+                                <option value="@b">@b</option>
+                            }
+                        </select>
+                        <div class="form-text">BirimDondur servisinden alınan birim listesi</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Not (isteğe bağlı)</label>
+                        <input type="text" name="note" class="form-control" maxlength="200"
+                               placeholder="Örn: Bölüm Başkanı" />
+                    </div>
+                    <button type="submit" class="btn btn-sa w-100">
+                        <i class="bi bi-person-plus me-1"></i>Admin Yetkisi Ver
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMİN LİSTESİ -->
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Mevcut Adminler</h6>
+                <!-- Filtre -->
+                <form method="get" asp-action="AdminManagement" class="d-flex gap-2 align-items-center">
+                    <select name="filterBirim" class="form-select form-select-sm" style="max-width:200px;"
+                            onchange="this.form.submit()">
+                        <option value="">— Tüm Birimler —</option>
+                        @foreach (var b in Model.AllBirimler)
+                        {
+                            <option value="@b" selected="@(Model.FilterBirim == b ? "selected" : null)">@b</option>
+                        }
+                    </select>
+                    @if (!string.IsNullOrEmpty(Model.FilterBirim))
+                    {
+                        <a asp-action="AdminManagement" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-x"></i>
+                        </a>
+                    }
+                </form>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Admins.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Kullanıcı Adı</th>
+                                    <th>Fakülte / Birim</th>
+                                    <th>Not</th>
+                                    <th>Eklenme</th>
+                                    <th class="text-end">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in Model.Admins)
+                                {
+                                    <tr>
+                                        <td>
+                                            <i class="bi bi-person-badge me-1" style="color:#7c3aed;"></i>
+                                            <strong>@a.Username</strong>
+                                        </td>
+                                        <td><span class="badge bg-secondary">@a.PersonelBirim</span></td>
+                                        <td class="text-muted small">@(a.Note ?? "-")</td>
+                                        <td class="text-muted small">@a.CreatedAt.ToString("dd.MM.yyyy")</td>
+                                        <td class="text-end">
+                                            <form asp-action="RemoveAdmin" method="post" style="display:inline;">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@a.Id" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                        title="Yetkiyi Kaldır"
+                                                        onclick="return confirm('@a.Username kullanıcısının admin yetkisi kaldırılsın mı?')">
+                                                    <i class="bi bi-person-dash"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-people" style="font-size:3rem;"></i>
+                        <p class="mt-2">Henüz admin eklenmemiş.</p>
+                    </div>
+                }
+            </div>
+            @if (Model.Admins.Any())
+            {
+                <div class="card-footer bg-white text-muted small">
+                    Toplam <strong>@Model.Admins.Count</strong> admin
+                </div>
+            }
+        </div>
+    </div>
+</div>

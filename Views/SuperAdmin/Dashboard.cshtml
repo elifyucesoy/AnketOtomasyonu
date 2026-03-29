@@ -1,0 +1,209 @@
+@using AnketOtomasyonu.Models.Entities
+@using AnketOtomasyonu.Models.ViewModels
+@model SuperAdminDashboardViewModel
+@{
+    ViewData["Title"] = "SuperAdmin Dashboard";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0"><i class="bi bi-shield-fill-check me-2" style="color:#7c3aed;"></i>SuperAdmin Paneli</h2>
+        <small class="text-muted">Tüm fakültelerin anketlerini görüntüle ve yönet</small>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        @if (Model.PendingApprovalCount > 0)
+        {
+            <a asp-action="SurveyApprovals" class="btn btn-warning fw-bold">
+                <i class="bi bi-clock-history me-1"></i>
+                @Model.PendingApprovalCount Onay Bekliyor
+            </a>
+        }
+        else
+        {
+            <a asp-action="SurveyApprovals" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-clock-history me-1"></i>Onay Listesi
+            </a>
+        }
+        <a asp-controller="Admin" asp-action="CreateSurvey" class="btn fw-bold"
+           style="background:#7c3aed;color:#fff;">
+            <i class="bi bi-plus-circle me-1"></i>Yeni Anket
+        </a>
+    </div>
+</div>
+
+<!-- İSTATİSTİK KARTLARI -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-2">
+        <div class="card stat-card text-center py-3">
+            <i class="bi bi-clipboard2-data" style="font-size:1.8rem;color:#7c3aed;"></i>
+            <h3 class="fw-bold mt-1 mb-0">@Model.TotalSurveys</h3>
+            <p class="text-muted small mb-0">Toplam Anket</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card text-center py-3">
+            <i class="bi bi-check-circle text-success" style="font-size:1.8rem;"></i>
+            <h3 class="fw-bold mt-1 mb-0">@Model.ActiveSurveys</h3>
+            <p class="text-muted small mb-0">Aktif</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card text-center py-3">
+            <i class="bi bi-pencil-square text-warning" style="font-size:1.8rem;"></i>
+            <h3 class="fw-bold mt-1 mb-0">@Model.DraftSurveys</h3>
+            <p class="text-muted small mb-0">Taslak</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card text-center py-3">
+            <i class="bi bi-hourglass-split text-danger" style="font-size:1.8rem;"></i>
+            <h3 class="fw-bold mt-1 mb-0">@Model.PendingApprovalCount</h3>
+            <p class="text-muted small mb-0">Onay Bekleyen</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card text-center py-3">
+            <i class="bi bi-chat-square-text text-info" style="font-size:1.8rem;"></i>
+            <h3 class="fw-bold mt-1 mb-0">@Model.TotalResponses</h3>
+            <p class="text-muted small mb-0">Yanıt</p>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card text-center py-3">
+            <i class="bi bi-person-check-fill" style="font-size:1.8rem;color:#7c3aed;"></i>
+            <h3 class="fw-bold mt-1 mb-0">@Model.TotalAdminCount</h3>
+            <p class="text-muted small mb-0">Toplam Admin</p>
+        </div>
+    </div>
+</div>
+
+<!-- FAKÜLTE FİLTRESİ -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-3">
+        <form method="get" asp-action="Dashboard" class="d-flex gap-2 align-items-center flex-wrap">
+            <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Fakülte / Birim Filtrele:</label>
+            <select name="birim" class="form-select form-select-sm" style="max-width:320px;"
+                    onchange="this.form.submit()">
+                <option value="">— Tüm Fakülteler —</option>
+                @foreach (var b in Model.AllBirimler)
+                {
+                    <option value="@b" selected="@(Model.SelectedBirim == b ? "selected" : null)">@b</option>
+                }
+            </select>
+            @if (!string.IsNullOrEmpty(Model.SelectedBirim))
+            {
+                <a asp-action="Dashboard" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x-circle me-1"></i>Temizle
+                </a>
+            }
+        </form>
+    </div>
+</div>
+
+<!-- ANKET LİSTESİ -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-list-ul me-2"></i>Anketler
+            @if (!string.IsNullOrEmpty(Model.SelectedBirim))
+            {
+                <span class="badge bg-purple ms-2" style="background:#7c3aed !important;">@Model.SelectedBirim</span>
+            }
+        </h5>
+        <span class="text-muted small">@Model.Surveys.Count kayıt</span>
+    </div>
+    <div class="card-body p-0">
+        @if (Model.Surveys.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Anket Adı</th>
+                            <th>Fakülte / Birim</th>
+                            <th>Oluşturan</th>
+                            <th>Durum</th>
+                            <th>Onay</th>
+                            <th>Soru</th>
+                            <th>Yanıt</th>
+                            <th>Tarih</th>
+                            <th class="text-end">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model.Surveys)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@s.Title</td>
+                                <td><span class="badge bg-secondary">@s.CreatedByBirim</span></td>
+                                <td class="text-muted small">@s.CreatedByName</td>
+                                <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
+                                <td>
+                                    <span class="badge @s.ApprovalBadgeClass" title="@s.ApprovalNote">
+                                        @s.ApprovalLabel
+                                    </span>
+                                </td>
+                                <td>@s.QuestionCount</td>
+                                <td>@s.ResponseCount</td>
+                                <td class="text-muted small">@s.CreatedAt.ToString("dd.MM.yyyy")</td>
+                                <td class="text-end">
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        <a asp-action="PreviewSurvey" asp-route-id="@s.Id"
+                                           class="btn btn-sm btn-outline-primary" title="Anketi Önizle">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        @if (s.ResponseCount > 0)
+                                        {
+                                            <a asp-action="Results" asp-route-id="@s.Id"
+                                               class="btn btn-sm btn-outline-info" title="Sonuçları Gör">
+                                                <i class="bi bi-bar-chart"></i>
+                                            </a>
+                                        }
+                                        @if (s.ApprovalStatus == ApprovalStatus.Pending)
+                                        {
+                                            <a asp-action="SurveyApprovals"
+                                               class="btn btn-sm btn-warning" title="Onayla / Reddet">
+                                                <i class="bi bi-clipboard-check"></i>
+                                            </a>
+                                        }
+                                        @if (s.Status == "Taslak" && s.ApprovalStatus == ApprovalStatus.Approved)
+                                        {
+                                            <form asp-controller="Admin" asp-action="Publish"
+                                                  asp-route-id="@s.Id" method="post" style="display:inline;">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn btn-sm btn-success" title="Yayınla"
+                                                        onclick="return confirm('Anket yayınlansın mı?')">
+                                                    <i class="bi bi-broadcast"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                        @if (s.Status == "Aktif")
+                                        {
+                                            <form asp-controller="Admin" asp-action="Close"
+                                                  asp-route-id="@s.Id" method="post" style="display:inline;">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn btn-sm btn-warning" title="Kapat"
+                                                        onclick="return confirm('Anket kapatılsın mı?')">
+                                                    <i class="bi bi-stop-circle"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox" style="font-size:3rem;"></i>
+                <p class="mt-2">
+                    @(string.IsNullOrEmpty(Model.SelectedBirim) ? "Henüz anket yok." : $"'{Model.SelectedBirim}' birimine ait anket bulunamadı.")
+                </p>
+            </div>
+        }
+    </div>
+</div>

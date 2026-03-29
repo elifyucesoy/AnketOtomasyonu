@@ -1,0 +1,97 @@
+@using AnketOtomasyonu.Models.ViewModels
+@model SuperAdminResultsViewModel
+@{
+    ViewData["Title"] = "Tüm Anket Sonuçları";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0"><i class="bi bi-bar-chart-line me-2" style="color:#7c3aed;"></i>Anket Sonuçları</h2>
+        <small class="text-muted">Tüm fakültelerin anket sonuçlarını filtreleyin</small>
+    </div>
+    <a asp-action="Dashboard" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Dashboard
+    </a>
+</div>
+
+<!-- FAKÜLTE FİLTRESİ -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-3">
+        <form method="get" asp-action="AllResults" class="d-flex gap-2 align-items-center flex-wrap">
+            <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Fakülte / Birim:</label>
+            <select name="birim" class="form-select form-select-sm" style="max-width:320px;"
+                    onchange="this.form.submit()">
+                <option value="">— Tüm Fakülteler —</option>
+                @foreach (var b in Model.AllBirimler)
+                {
+                    <option value="@b" selected="@(Model.SelectedBirim == b ? "selected" : null)">@b</option>
+                }
+            </select>
+            @if (!string.IsNullOrEmpty(Model.SelectedBirim))
+            {
+                <a asp-action="AllResults" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x-circle me-1"></i>Temizle
+                </a>
+            }
+        </form>
+    </div>
+</div>
+
+<!-- SONUÇ LİSTESİ -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Yanıt Alan Anketler</h5>
+        <span class="text-muted small">@Model.Surveys.Count anket</span>
+    </div>
+    <div class="card-body p-0">
+        @if (Model.Surveys.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Anket Adı</th>
+                            <th>Fakülte / Birim</th>
+                            <th>Oluşturan</th>
+                            <th>Durum</th>
+                            <th>Yanıt Sayısı</th>
+                            <th>Tarih</th>
+                            <th class="text-end">Sonuçlar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model.Surveys.OrderByDescending(x => x.ResponseCount))
+                        {
+                            <tr>
+                                <td class="fw-semibold">@s.Title</td>
+                                <td><span class="badge bg-secondary">@s.CreatedByBirim</span></td>
+                                <td class="text-muted small">@s.CreatedByName</td>
+                                <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
+                                <td>
+                                    <span class="fw-bold" style="color:#7c3aed;">@s.ResponseCount</span>
+                                    <span class="text-muted small"> katılımcı</span>
+                                </td>
+                                <td class="text-muted small">@s.CreatedAt.ToString("dd.MM.yyyy")</td>
+                                <td class="text-end">
+                                    <a asp-action="Results" asp-route-id="@s.Id"
+                                       class="btn btn-sm btn-outline-info">
+                                        <i class="bi bi-bar-chart me-1"></i>Detay
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-inbox" style="font-size:3rem;"></i>
+                <p class="mt-2">
+                    @(string.IsNullOrEmpty(Model.SelectedBirim) ? "Henüz yanıt alınmış anket yok." : $"'{Model.SelectedBirim}' birimine ait yanıtlı anket bulunamadı.")
+                </p>
+            </div>
+        }
+    </div>
+</div>

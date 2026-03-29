@@ -56,8 +56,11 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ANKET_API_ADMIN", policy =>
         policy.RequireRole("Admin", "SuperAdmin"));
 
+    options.AddPolicy("ANKET_API_SUPERADMIN", policy =>
+        policy.RequireRole("SuperAdmin"));
+
     options.AddPolicy("ANKET_API_ADMIN_OR_ANKET_API_STUDENT", policy =>
-        policy.RequireRole("Admin", "SuperAdmin", "Student", "Employee"));
+        policy.RequireRole("Admin", "SuperAdmin", "Student", "Employee", "Akademik"));
 });
 
 // REPOSITORIES
@@ -67,6 +70,7 @@ builder.Services.AddScoped<ISurveyResponseRepository, SurveyResponseRepository>(
 // SERVICES
 builder.Services.AddScoped<ISurveyService, SurveyService>();
 builder.Services.AddScoped<ISurveyResponseService, SurveyResponseService>();
+builder.Services.AddSingleton<IBirimService, BirimService>();
 
 var app = builder.Build();
 
