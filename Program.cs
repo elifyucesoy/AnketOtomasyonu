@@ -19,7 +19,17 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // MVC
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(options => {
+        options.JsonSerializerOptions.PropertyNamingPolicy = null;
+    });
+
+// TURKISH CHARACTER SUPPORT
+System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+builder.Services.Configure<Microsoft.Extensions.WebEncoders.WebEncoderOptions>(options =>
+{
+    options.TextEncoderSettings = new System.Text.Encodings.Web.TextEncoderSettings(System.Text.Unicode.UnicodeRanges.All);
+});
 
 // HTTP
 builder.Services.AddHttpClient();

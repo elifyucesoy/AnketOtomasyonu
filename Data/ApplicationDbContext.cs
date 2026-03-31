@@ -25,7 +25,8 @@ namespace AnketOtomasyonu.Data
                 entity.Property(e => e.Username).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.PersonelBirim).HasMaxLength(300).IsRequired();
                 entity.Property(e => e.Note).HasMaxLength(500);
-                entity.HasIndex(e => new { e.Username, e.PersonelBirim }).IsUnique();
+                // Unique constraint kaldırıldı: Aynı kullanıcı birden fazla birimde admin olabilir
+                entity.HasIndex(e => new { e.Username, e.PersonelBirim });
             });
 
             modelBuilder.Entity<Survey>(entity =>

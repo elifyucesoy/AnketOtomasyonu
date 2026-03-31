@@ -27,14 +27,17 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Kullanıcı Adı <span class="text-danger">*</span></label>
                         <div class="input-group">
-                            <input type="text" name="username" class="form-control"
+                            <input type="text" name="username" id="adminUsername" class="form-control"
                                    placeholder="ornek_kullanici" required maxlength="100" />
+                            <button type="button" class="btn btn-outline-primary" id="btnSearchLdap" title="Bilgileri LDAP'tan Getir">
+                                <i class="bi bi-search"></i>
+                            </button>
                         </div>
-                        <div class="form-text">Kurumsal mail adresi (@@'siz, örn: elif_yucesoy)</div>
+                        <div class="form-text">Kurumsal kullanıcı adı veya 11 haneli T.C. Kimlik No</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Fakülte / Birim <span class="text-danger">*</span></label>
-                        <select name="personelBirim" class="form-select" required>
+                        <select name="personelBirim" id="adminBirim" class="form-select" required>
                             <option value="">— Birim Seçiniz —</option>
                             @foreach (var b in Model.AllBirimler)
                             {
@@ -44,9 +47,9 @@
                         <div class="form-text">BirimDondur servisinden alınan birim listesi</div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small">Not (isteğe bağlı)</label>
-                        <input type="text" name="note" class="form-control" maxlength="200"
-                               placeholder="Örn: Bölüm Başkanı" />
+                        <label class="form-label fw-semibold small">Not / Ad-Soyad (isteğe bağlı)</label>
+                        <input type="text" name="note" id="adminNote" class="form-control" maxlength="200"
+                               placeholder="Bölüm Başkanı veya İsim" />
                     </div>
                     <button type="submit" class="btn btn-sa w-100">
                         <i class="bi bi-person-plus me-1"></i>Admin Yetkisi Ver
@@ -138,3 +141,55 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('#btnSearchLdap').click(function () {
+                const username = $('#adminUsername').val();
+                if (!username) {
+                    alert('Lütfen önce bir kullanıcı adı girin.');
+                    return;
+                }
+
+                const btn = $(this);
+                const originalIcon = btn.html();
+                btn.html('<span class="spinner-border spinner-border-sm"></span>').prop('disabled', true);
+
+                $.get('/SuperAdmin/GetPersonelInfo', { username: username })
+                    .done(function (res) {
+                        if (res.success) {
+                            // Birimi seç
+                            if (res.birim) {
+                                let found = false;
+                                $('#adminBirim option').each(function() {
+                                    if ($(this).val().toUpperCase() === res.birim.toUpperCase()) {
+                                        $(this).prop('selected', true);
+                                        found = true;
+                                    }
+                                });
+                                
+                                if (!found) {
+                                   // Eğer tam eşleşme yoksa yeni bir option ekle (geçici)
+                                   $('#adminBirim').append(new Option(res.birim, res.birim, true, true));
+                                }
+                            }
+                            
+                            // Not kısmına ad soyad yaz
+                            $('#adminNote').val(res.ad + ' ' + res.soyad);
+                            
+                            toastr?.success('Bilgiler LDAP üzerinden getirildi.');
+                        } else {
+                            alert(res.message || 'Bilgi getirilemedi.');
+                        }
+                    })
+                    .fail(function () {
+                        alert('Sunucu iletişim hatası oluştu.');
+                    })
+                    .always(function () {
+                        btn.html(originalIcon).prop('disabled', false);
+                    });
+            });
+        });
+    </script>
+}

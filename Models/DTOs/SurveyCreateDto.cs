@@ -19,6 +19,7 @@ namespace AnketOtomasyonu.Models.DTOs
         public DateTime? EndDate { get; set; }
         public List<string> TargetFaculties { get; set; } = new();
         public List<string> TargetDepartments { get; set; } = new();
+        public string? CreatedByBirim { get; set; }
 
         public List<QuestionCreateDto> Questions { get; set; } = new();
     }

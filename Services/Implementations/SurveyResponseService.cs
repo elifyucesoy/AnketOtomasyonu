@@ -115,21 +115,40 @@ namespace AnketOtomasyonu.Services.Implementations
             return (true, "Anket başarıyla gönderildi. Teşekkür ederiz!");
         }
 
-        public async Task<SurveyResultDto> GetSurveyResultsAsync(int surveyId)
+        public async Task<SurveyResultDto> GetSurveyResultsAsync(int surveyId, string? fakulte = null, string? bolum = null)
         {
-            var survey = await _context.Surveys
+            var query = _context.Surveys
                 .Include(s => s.Questions).ThenInclude(q => q.Options)
                 .Include(s => s.Responses).ThenInclude(r => r.Answers)
-                .FirstOrDefaultAsync(s => s.Id == surveyId);
+                .AsQueryable();
+
+            var survey = await query.FirstOrDefaultAsync(s => s.Id == surveyId);
 
             if (survey == null) return new SurveyResultDto();
+
+            // Filtreleme uygulama
+            var filteredResponses = survey.Responses.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(fakulte))
+            {
+                filteredResponses = filteredResponses.Where(r => 
+                    string.Equals(r.FakulteAdi, fakulte, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrEmpty(bolum))
+            {
+                filteredResponses = filteredResponses.Where(r => 
+                    string.Equals(r.BolumAdi, bolum, StringComparison.OrdinalIgnoreCase));
+            }
+
+            var responsesList = filteredResponses.ToList();
 
             return new SurveyResultDto
             {
                 SurveyId = survey.Id,
                 Title = survey.Title,
-                TotalResponses = survey.Responses.Count,
-                Respondents = survey.Responses.Select(r => new RespondentInfoDto
+                TotalResponses = responsesList.Count,
+                Respondents = responsesList.Select(r => new RespondentInfoDto
                 {
                     UserFullName = r.UserFullName,
                     FakulteAdi = r.FakulteAdi,
@@ -138,7 +157,7 @@ namespace AnketOtomasyonu.Services.Implementations
                 }).OrderByDescending(r => r.SubmittedAt).ToList(),
                 Questions = survey.Questions.Select(q =>
                 {
-                    var answers = survey.Responses
+                    var answers = responsesList
                         .SelectMany(r => r.Answers)
                         .Where(a => a.QuestionId == q.Id).ToList();
 
@@ -164,7 +183,44 @@ namespace AnketOtomasyonu.Services.Implementations
                                 .Select(a => a.OpenEndedAnswer!).ToList()
                             : new List<string>()
                     };
-                }).ToList()
+                }).ToList(),
+                DepartmentResults = responsesList
+                    .Where(r => !string.IsNullOrEmpty(r.BolumAdi))
+                    .GroupBy(r => r.BolumAdi!)
+                    .Select(g => new DepartmentResultDto
+                    {
+                        DepartmentName = g.Key,
+                        ResponseCount = g.Count(),
+                        AverageSatisfaction = g.SelectMany(r => r.Answers)
+                            .Where(a => survey.Questions.Any(q => q.Id == a.QuestionId && q.Type == QuestionType.Likert))
+                            .Where(a => a.SelectedOptionId.HasValue)
+                            .Select(a => {
+                                var q = survey.Questions.First(x => x.Id == a.QuestionId);
+                                var opt = q.Options.First(o => o.Id == a.SelectedOptionId);
+                                return (double)(opt.Value ?? 0);
+                            })
+                            .DefaultIfEmpty(0)
+                            .Average()
+                    }).ToList(),
+
+                FakulteResults = responsesList
+                    .Where(r => !string.IsNullOrEmpty(r.FakulteAdi))
+                    .GroupBy(r => r.FakulteAdi!)
+                    .Select(g => new FakulteResultDto
+                    {
+                        FakulteName = g.Key,
+                        ResponseCount = g.Count(),
+                        AverageSatisfaction = g.SelectMany(r => r.Answers)
+                            .Where(a => survey.Questions.Any(q => q.Id == a.QuestionId && q.Type == QuestionType.Likert))
+                            .Where(a => a.SelectedOptionId.HasValue)
+                            .Select(a => {
+                                var q = survey.Questions.First(x => x.Id == a.QuestionId);
+                                var opt = q.Options.First(o => o.Id == a.SelectedOptionId);
+                                return (double)(opt.Value ?? 0);
+                            })
+                            .DefaultIfEmpty(0)
+                            .Average()
+                    }).ToList()
             };
         }
     }

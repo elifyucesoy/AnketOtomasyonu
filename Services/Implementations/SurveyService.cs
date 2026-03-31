@@ -80,6 +80,19 @@ namespace AnketOtomasyonu.Services.Implementations
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<Survey>> GetSurveysByBirimsAsync(List<string> birims)
+        {
+            if (birims == null || birims.Count == 0)
+                return Enumerable.Empty<Survey>();
+
+            return await _context.Surveys
+                .Where(s => s.CreatedByBirim != null && birims.Contains(s.CreatedByBirim))
+                .Include(s => s.Questions)
+                .Include(s => s.Responses)
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+        }
+
         public async Task<Survey> CreateSurveyAsync(
             SurveyCreateDto dto, string creatorUserId, string creatorName, string? creatorBirim = null)
         {
@@ -95,7 +108,7 @@ namespace AnketOtomasyonu.Services.Implementations
                 TargetDepartments = dto.TargetDepartments.Any() ? string.Join(",", dto.TargetDepartments) : null,
                 CreatedByUserId = creatorUserId,
                 CreatedByName = creatorName,
-                CreatedByBirim = creatorBirim,
+                CreatedByBirim = dto.CreatedByBirim ?? creatorBirim,
                 Status = SurveyStatus.Draft,
                 CreatedAt = DateTime.UtcNow
             };
@@ -184,6 +197,7 @@ namespace AnketOtomasyonu.Services.Implementations
             survey.StartDate = dto.StartDate;
             survey.EndDate = dto.EndDate;
             survey.TargetRoles = string.Join(",", dto.TargetRoles);
+            survey.CreatedByBirim = dto.CreatedByBirim;
             survey.UpdatedAt = DateTime.UtcNow;
 
             // Eski soruları ve seçenekleri sil

@@ -94,8 +94,15 @@ namespace AnketOtomasyonu.Controllers
                     break;
             }
 
+            // DevLogin için de AuthorizedUnits desteği
+            List<string>? devAuthorizedUnits = null;
+            if (sessionRole == "Admin" && !string.IsNullOrEmpty(personelBirim))
+            {
+                devAuthorizedUnits = new List<string> { personelBirim };
+            }
+
             var identity = CreateClaimsIdentity(userId, $"DevUser ({sessionRole})", sessionRole, userTypeId,
-                personelBirim, jobRecordType, fakulteAdi, bolumAdi);
+                personelBirim, jobRecordType, fakulteAdi, bolumAdi, devAuthorizedUnits);
             var principal = new ClaimsPrincipal(identity);
 
             await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
@@ -213,9 +220,22 @@ namespace AnketOtomasyonu.Controllers
                     if (per != null)
                     {
                         isPersonnelSuccess = true;
-                        bool inYetkiTable = await _db.AdminPermissions
-                            .AnyAsync(p => p.Username.ToLower() == mailKismi.ToLower() ||
-                                           p.Username.ToLower() == (mailKismi + "@selcuk.edu.tr").ToLower());
+
+                        // ── Yetkili birimleri topla: LDAP birimi + DB'deki ek birimler ──
+                        var dbBirims = await _db.AdminPermissions
+                            .Where(p => p.Username.ToLower() == mailKismi.ToLower() ||
+                                        p.Username.ToLower() == (mailKismi + "@selcuk.edu.tr").ToLower())
+                            .Select(p => p.PersonelBirim)
+                            .ToListAsync();
+
+                        bool inYetkiTable = dbBirims.Count > 0;
+
+                        // AuthorizedUnits = LDAP asıl birim + DB ek birimler
+                        var authorizedUnits = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(per.PersonelBirim))
+                            authorizedUnits.Add(per.PersonelBirim);
+                        authorizedUnits.AddRange(dbBirims);
+                        authorizedUnits = authorizedUnits.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
                         if (inYetkiTable)
                         {
@@ -237,10 +257,12 @@ namespace AnketOtomasyonu.Controllers
                             $"{per.Ad} {per.Soyad}".Trim(),
                             userRole, 0,
                             per.PersonelBirim, per.JobRecordType,
-                            per.PersonelBirim, "");
+                            per.PersonelBirim, "",
+                            isAdmin ? authorizedUnits : null);
 
-                        _logger.LogInformation("Personel giriş OK. TC:{TC} Rol:{R} Job:{J} Birim:{B}",
-                            per.TC, userRole, per.JobRecordType, per.PersonelBirim);
+                        _logger.LogInformation("Personel giriş OK. TC:{TC} Rol:{R} Job:{J} Birim:{B} YetkiliBirimler:{Units}",
+                            per.TC, userRole, per.JobRecordType, per.PersonelBirim,
+                            isAdmin ? string.Join(", ", authorizedUnits) : "-");
                     }
                 }
 
@@ -302,7 +324,8 @@ namespace AnketOtomasyonu.Controllers
         private ClaimsIdentity CreateClaimsIdentity(
             string userId, string fullName, string role, int userTypeId,
             string personelBirim, string jobRecordType,
-            string fakulteAdi, string bolumAdi)
+            string fakulteAdi, string bolumAdi,
+            List<string>? authorizedUnits = null)
         {
             var claims = new List<Claim>
             {
@@ -315,6 +338,16 @@ namespace AnketOtomasyonu.Controllers
                 new Claim("FakulteAdi", fakulteAdi ?? ""),
                 new Claim("BolumAdi", bolumAdi ?? "")
             };
+
+            // AuthorizedUnits: LDAP birimi + veritabanındaki ek birimler (çoklu birim desteği)
+            if (authorizedUnits != null && authorizedUnits.Count > 0)
+            {
+                foreach (var unit in authorizedUnits.Distinct())
+                {
+                    claims.Add(new Claim("AuthorizedUnits", unit));
+                }
+            }
+
             return new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         }
 
@@ -429,9 +462,7 @@ namespace AnketOtomasyonu.Controllers
             if (infoNode == null) return null;
 
             var hataKodu = infoNode.Elements().FirstOrDefault(x => x.Name.LocalName == "SonucHataKodu")?.Value;
-            // "1" = Veri döndü (başarılı)
-            if (string.IsNullOrEmpty(hataKodu) || hataKodu == "0")
-                return null;
+            if (string.IsNullOrEmpty(hataKodu) || hataKodu == "0") return null;
 
             string F(string name) => infoNode.Elements()
                 .FirstOrDefault(x => string.Equals(x.Name.LocalName, name, StringComparison.OrdinalIgnoreCase))?.Value ?? "";

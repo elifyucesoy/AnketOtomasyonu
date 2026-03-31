@@ -55,25 +55,6 @@
 
                 <div class="col-12 mt-3">
                     <hr />
-                    <h6 class="fw-bold mb-3"><i class="bi bi-geo-alt me-2"></i>Hedefleme Ayarları (Opsiyonel)</h6>
-                    <p class="small text-muted mb-3">Sadece belirli birim veya bölümlere kısıtlamak istiyorsanız seçiniz. Boş bırakılırsa tüm birimler katılamaz (Hedef Roller'e bağlı olarak).</p>
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Hedef Fakülteler / Birimler</label>
-                    @{
-                        var adminBirim = ViewBag.AdminBirim as string ?? "";
-                    }
-                    <select name="TargetFaculties" id="TargetFaculties" class="form-select select2" multiple="multiple">
-                        @foreach (var birim in (List<string>)ViewBag.Birimler)
-                        {
-                            var isSelected = string.Equals(birim, adminBirim, StringComparison.OrdinalIgnoreCase);
-                            <option value="@birim" selected="@(isSelected ? "selected" : null)">@birim</option>
-                        }
-                    </select>
-                    <small class="text-muted">Kendi biriminiz otomatik seçilir. Birden fazla seçmek için basılı tutup seçin.</small>
-                </div>
-
                 <!-- Hedef Bölümler kaldırıldı -->
             </div>
         </div>
