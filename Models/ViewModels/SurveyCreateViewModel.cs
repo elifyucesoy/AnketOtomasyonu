@@ -37,6 +37,8 @@ namespace AnketOtomasyonu.Models.ViewModels
         [Display(Name = "Anketin Bağlı Olduğu Birim")]
         public string? SelectedBirim { get; set; }
 
+        public List<string> AuthorizedUnits { get; set; } = new();
+
         public List<QuestionCreateViewModel> Questions { get; set; } = new();
 
         /// <summary>Mevcut roller (checkbox listesi için) — API'deki UserType değerlerine karşılık gelir</summary>

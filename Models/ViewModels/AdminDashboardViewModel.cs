@@ -1,4 +1,5 @@
-﻿using AnketOtomasyonu.Models.Entities;
+using AnketOtomasyonu.Models.Entities;
+using System.ComponentModel.DataAnnotations;
 
 namespace AnketOtomasyonu.Models.ViewModels
 {
@@ -9,6 +10,10 @@ namespace AnketOtomasyonu.Models.ViewModels
         public int TotalResponses { get; set; }
         public int ActiveSurveys { get; set; }
         public int DraftSurveys { get; set; }
+
+        // Çoklu birim yetkisi ve filtreleme için
+        public List<string> AuthorizedUnits { get; set; } = new();
+        public string? SelectedBirim { get; set; }
 
         /// <summary>Son oluşturulan anketler (Dashboard'da liste için)</summary>
         public List<SurveyListItemViewModel> RecentSurveys { get; set; } = new();

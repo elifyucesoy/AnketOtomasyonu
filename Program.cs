@@ -13,6 +13,11 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// SET GLOBAL CULTURE TO TURKISH
+var cultureInfo = new System.Globalization.CultureInfo("tr-TR");
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
+
 // DATABASE
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(

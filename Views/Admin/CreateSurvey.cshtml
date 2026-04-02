@@ -53,6 +53,26 @@
                     </div>
                 </div>
 
+                <!-- ANKETİ YAYINLAYAN BİRİM -->
+                <div class="col-md-12 mt-3">
+                    <label class="form-label fw-semibold">Anketi Yayınlayan Birim</label>
+                    <select name="CreatedByBirim" id="createdByBirim" class="form-select">
+                        @if (Model.AuthorizedUnits != null && Model.AuthorizedUnits.Any())
+                        {
+                            foreach (var birim in Model.AuthorizedUnits)
+                            {
+                                <option value="@birim" selected="@(Model.SelectedBirim == birim ? "selected" : null)">@birim</option>
+                            }
+                        }
+                        else
+                        {
+                            @* SuperAdmin veya birimi atanmamış admin için *@
+                            <option value="MERKEZ">MERKEZ (Tüm Birimler)</option>
+                        }
+                    </select>
+                    <small class="text-muted">Anket bu birim adına yayınlanacak. Birden fazla biriminiz varsa seçim yapabilirsiniz.</small>
+                </div>
+
                 <div class="col-12 mt-3">
                     <hr />
                 <!-- Hedef Bölümler kaldırıldı -->

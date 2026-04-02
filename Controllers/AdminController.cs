@@ -40,10 +40,18 @@ namespace AnketOtomasyonu.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Dashboard()
+        public async Task<IActionResult> Dashboard(string? birim = null)
         {
             var userRole = User.FindFirstValue(ClaimTypes.Role);
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0";
+            
+            // Kullanıcının yetkili olduğu tüm birimler (claim'den)
+            var authorizedUnits = User.FindAll("AuthorizedUnits").Select(c => c.Value).Distinct().ToList();
+            if (!authorizedUnits.Any())
+            {
+                var userBirim = User.FindFirstValue("PersonelBirim");
+                if (!string.IsNullOrEmpty(userBirim)) authorizedUnits.Add(userBirim);
+            }
 
             List<Survey> all;
             if (userRole == "SuperAdmin")
@@ -55,14 +63,23 @@ namespace AnketOtomasyonu.Controllers
                 all = (await _surveyService.GetSurveysByCreatorAsync(userId)).ToList();
             }
 
+            // Seçili birim filtresi varsa uygula
+            var filtered = all;
+            if (!string.IsNullOrEmpty(birim))
+            {
+                filtered = all.Where(s => string.Equals(s.CreatedByBirim, birim, StringComparison.CurrentCultureIgnoreCase)).ToList();
+            }
+
             var vm = new AdminDashboardViewModel
             {
-                TotalSurveys = all.Count,
-                ActiveSurveys = all.Count(s => s.Status == SurveyStatus.Active),
-                DraftSurveys = all.Count(s => s.Status == SurveyStatus.Draft),
-                TotalResponses = all.Sum(s => s.Responses.Count),
+                TotalSurveys = filtered.Count,
+                ActiveSurveys = filtered.Count(s => s.Status == SurveyStatus.Active),
+                DraftSurveys = filtered.Count(s => s.Status == SurveyStatus.Draft),
+                TotalResponses = filtered.Sum(s => s.Responses.Count),
                 TotalUsers = 0,
-                RecentSurveys = all.Take(20).Select(s => new SurveyListItemViewModel
+                AuthorizedUnits = authorizedUnits,
+                SelectedBirim = birim,
+                RecentSurveys = filtered.OrderByDescending(s => s.CreatedAt).Take(50).Select(s => new SurveyListItemViewModel
                 {
                     Id = s.Id,
                     Title = s.Title,
@@ -98,28 +115,55 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public IActionResult CreateSurvey()
         {
+            var model = new SurveyCreateViewModel();
+
+            // Kullanıcının yetkili olduğu birimler (Claims'den)
+            model.AuthorizedUnits = User.FindAll("AuthorizedUnits").Select(c => c.Value).Distinct().ToList();
+
+            // Eğer AuthorizedUnits boşsa PersonelBirim'i ekle
+            if (!model.AuthorizedUnits.Any())
+            {
+                var birim = User.FindFirstValue("PersonelBirim");
+                if (!string.IsNullOrEmpty(birim)) model.AuthorizedUnits.Add(birim);
+            }
+
             ViewBag.AllBirimler = _birimService.GetAllNames();
-            return View(new SurveyCreateViewModel());
+            return View(model);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateSurvey(SurveyCreateDto dto)
         {
-            if (!ModelState.IsValid)
+            // Sadece başlık zorunlu — diğer alanlar opsiyonel
+            if (string.IsNullOrWhiteSpace(dto.Title))
             {
-                TempData["Error"] = "Lütfen zorunlu alanları doldurunuz.";
-                return View(new SurveyCreateViewModel
+                var errorModel = new SurveyCreateViewModel
                 {
                     Title = dto.Title,
                     Description = dto.Description
-                });
+                };
+                errorModel.AuthorizedUnits = User.FindAll("AuthorizedUnits").Select(c => c.Value).Distinct().ToList();
+                if (!errorModel.AuthorizedUnits.Any())
+                {
+                    var ub = User.FindFirstValue("PersonelBirim");
+                    if (!string.IsNullOrEmpty(ub)) errorModel.AuthorizedUnits.Add(ub);
+                }
+                errorModel.SelectedBirim = dto.CreatedByBirim;
+                ViewBag.AllBirimler = _birimService.GetAllNames();
+                TempData["Error"] = "Anket başlığı zorunludur.";
+                return View(errorModel);
             }
 
             // Kullanıcı bilgisi claim'den okunur
-            var createdById    = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0";
-            var createdByName  = User.FindFirstValue(ClaimTypes.Name) ?? "Bilinmiyor";
-            var createdByBirim = User.FindFirstValue("PersonelBirim");
+            var createdById   = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0";
+            var createdByName = User.FindFirstValue(ClaimTypes.Name) ?? "Bilinmiyor";
+
+            // Admin formdan hangi birimi seçtiyse o kullanılır;
+            // Seçilmediyse PersonelBirim claim'i, o da yoksa MERKEZ
+            var createdByBirim = !string.IsNullOrEmpty(dto.CreatedByBirim)
+                ? dto.CreatedByBirim
+                : (User.FindFirstValue("PersonelBirim") ?? "MERKEZ");
 
             await _surveyService.CreateSurveyAsync(dto, createdById, createdByName, createdByBirim);
 

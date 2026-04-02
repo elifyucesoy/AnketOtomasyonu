@@ -98,17 +98,23 @@ namespace AnketOtomasyonu.Services.Implementations
         {
             var survey = new Survey
             {
-                Title = dto.Title,
-                Description = dto.Description,
+                Title = dto.Title?.Trim() ?? string.Empty,
+                Description = dto.Description?.Trim() ?? string.Empty,
                 IsAnonymous = dto.IsAnonymous,
                 StartDate = dto.StartDate,
                 EndDate = dto.EndDate,
-                TargetRoles = string.Join(",", dto.TargetRoles),
-                TargetFaculties = dto.TargetFaculties.Any() ? string.Join(",", dto.TargetFaculties) : null,
-                TargetDepartments = dto.TargetDepartments.Any() ? string.Join(",", dto.TargetDepartments) : null,
+                TargetRoles = dto.TargetRoles != null && dto.TargetRoles.Any()
+                    ? string.Join(",", dto.TargetRoles)
+                    : string.Empty,
+                TargetFaculties = dto.TargetFaculties != null && dto.TargetFaculties.Any()
+                    ? string.Join(",", dto.TargetFaculties)
+                    : null,
+                TargetDepartments = dto.TargetDepartments != null && dto.TargetDepartments.Any()
+                    ? string.Join(",", dto.TargetDepartments)
+                    : null,
                 CreatedByUserId = creatorUserId,
-                CreatedByName = creatorName,
-                CreatedByBirim = dto.CreatedByBirim ?? creatorBirim,
+                CreatedByName = creatorName ?? string.Empty,
+                CreatedByBirim = dto.CreatedByBirim ?? creatorBirim ?? string.Empty,
                 Status = SurveyStatus.Draft,
                 CreatedAt = DateTime.UtcNow
             };

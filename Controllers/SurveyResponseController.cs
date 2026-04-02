@@ -122,11 +122,11 @@ namespace AnketOtomasyonu.Controllers
                 bool birimMatch = false;
 
                 // Creator match? (MERKEZ ise herkese açık, değilse sadece oluşturan birime)
-                if (string.Equals(survey.CreatedByBirim, "MERKEZ", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(survey.CreatedByBirim, "MERKEZ", StringComparison.CurrentCultureIgnoreCase))
                 {
                     birimMatch = true;
                 }
-                else if (!string.IsNullOrEmpty(userBirim) && string.Equals(survey.CreatedByBirim, userBirim, StringComparison.OrdinalIgnoreCase))
+                else if (!string.IsNullOrEmpty(userBirim) && string.Equals(survey.CreatedByBirim, userBirim, StringComparison.CurrentCultureIgnoreCase))
                 {
                     birimMatch = true;
                 }
@@ -134,8 +134,8 @@ namespace AnketOtomasyonu.Controllers
                 // Explicit target match?
                 if (!birimMatch && !string.IsNullOrEmpty(survey.TargetFaculties))
                 {
-                    var targetsCount = survey.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (!string.IsNullOrEmpty(userBirim) && targetsCount.Contains(userBirim, StringComparer.OrdinalIgnoreCase))
+                    var targets = survey.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (!string.IsNullOrEmpty(userBirim) && targets.Any(t => string.Equals(t, userBirim, StringComparison.CurrentCultureIgnoreCase)))
                     {
                         birimMatch = true;
                     }
@@ -152,12 +152,12 @@ namespace AnketOtomasyonu.Controllers
                 {
                     var targets = survey.TargetDepartments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                     var userBolum = (userType == "Employee")
-                        ? User.FindFirstValue("JobTitle") // Personel için unvan veya ek bir alan da olabilir ama genelde Fakülte yeterli
+                        ? User.FindFirstValue("JobTitle") 
                         : User.FindFirstValue("BolumAdi");
 
                     if (userType == "Student") // Bölüm kontrolü genelde öğrenciler için kritik
                     {
-                        if (string.IsNullOrEmpty(userBolum) || !targets.Contains(userBolum, StringComparer.OrdinalIgnoreCase))
+                        if (string.IsNullOrEmpty(userBolum) || !targets.Any(t => string.Equals(t, userBolum, StringComparison.CurrentCultureIgnoreCase)))
                         {
                             TempData["Error"] = "Bu anket okuduğunuz bölüme açık değildir.";
                             return RedirectToAction("NotFound_", "SurveyResponse");
@@ -259,11 +259,11 @@ namespace AnketOtomasyonu.Controllers
                 bool birimMatch = false;
 
                 // Creator match? (MERKEZ ise herkese açık, değilse sadece oluşturan birime)
-                if (string.Equals(survey.CreatedByBirim, "MERKEZ", StringComparison.OrdinalIgnoreCase))
+                if (NormalizeBirim(survey.CreatedByBirim) == "MERKEZ")
                 {
                     birimMatch = true;
                 }
-                else if (!string.IsNullOrEmpty(userBirim) && string.Equals(survey.CreatedByBirim, userBirim, StringComparison.OrdinalIgnoreCase))
+                else if (NormalizeBirim(survey.CreatedByBirim) == NormalizeBirim(userBirim))
                 {
                     birimMatch = true;
                 }
@@ -271,8 +271,9 @@ namespace AnketOtomasyonu.Controllers
                 // Explicit target match?
                 if (!birimMatch && !string.IsNullOrEmpty(survey.TargetFaculties))
                 {
-                    var targetsCount = survey.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (!string.IsNullOrEmpty(userBirim) && targetsCount.Contains(userBirim, StringComparer.OrdinalIgnoreCase))
+                    var targets = survey.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    var normalizedUserBirim = NormalizeBirim(userBirim);
+                    if (targets.Any(t => NormalizeBirim(t) == normalizedUserBirim))
                     {
                         birimMatch = true;
                     }
@@ -294,7 +295,8 @@ namespace AnketOtomasyonu.Controllers
 
                     if (userType == "Student")
                     {
-                        if (string.IsNullOrEmpty(userBolum) || !targets.Contains(userBolum, StringComparer.OrdinalIgnoreCase))
+                        var normalizedUserBolum = NormalizeBirim(userBolum);
+                        if (string.IsNullOrEmpty(normalizedUserBolum) || !targets.Any(t => NormalizeBirim(t) == normalizedUserBolum))
                         {
                             TempData["Error"] = "Bu anket okuduğunuz bölüme açık değildir.";
                             return RedirectToAction("NotFound_", "SurveyResponse");
@@ -344,6 +346,18 @@ namespace AnketOtomasyonu.Controllers
 
         [HttpGet("SurveyResponse/NotFound_")]
         public IActionResult NotFound_() => View();
+
+        // ── YARDIMCI METODLAR ──────────────────────────────
+        
+        /// <summary>
+        /// Türkçe karakter desteğiyle birim adlarını normalleştirir (BÜYÜK HARF + trim).
+        /// "Sosyal Bilimler Meslek Yüksekokulu" == "SOSYAL BİLİMLER MESLEK YÜKSEKOKULU" olur.
+        /// </summary>
+        private static string NormalizeBirim(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+            return text.Trim().ToUpper(new System.Globalization.CultureInfo("tr-TR"));
+        }
 
         // ── IP ALMA YARDIMCI METODU ──────────────────────
         private string GetClientIp()

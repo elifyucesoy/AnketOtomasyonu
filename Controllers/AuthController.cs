@@ -117,21 +117,30 @@ namespace AnketOtomasyonu.Controllers
         // ────────────────────────────────────────────────────────────────────────
 
         [HttpGet]
-        public IActionResult Login(string? returnUrl = null)
+        public async Task<IActionResult> Login(string? returnUrl = null)
         {
             bool isSurveyFill = !string.IsNullOrEmpty(returnUrl)
                 && returnUrl.Contains("SurveyResponse/Fill", StringComparison.OrdinalIgnoreCase);
 
             if (User.Identity != null && User.Identity.IsAuthenticated)
             {
-                if (isSurveyFill)
+                var currentRole = User.FindFirstValue(ClaimTypes.Role);
+                bool isStudentOrEmployee = currentRole == "Student" || currentRole == "Employee";
+
+                if (isSurveyFill && isStudentOrEmployee)
                 {
-                    HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                    // Her anket için taze giriş zorunlu: mevcut oturumu kapat
+                    await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                 }
-                else
+                else if (!isSurveyFill)
                 {
                     if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
                         return Redirect(returnUrl);
+
+                    var role = User.FindFirstValue(ClaimTypes.Role);
+                    if (role == "SuperAdmin") return RedirectToAction("Dashboard", "SuperAdmin");
+                    if (role == "Admin") return RedirectToAction("Dashboard", "Admin");
+                    if (role == "Akademik") return RedirectToAction("Dashboard", "Akademik");
                     return RedirectToAction("Index", "Home");
                 }
             }
@@ -293,6 +302,7 @@ namespace AnketOtomasyonu.Controllers
                 var principal = new ClaimsPrincipal(identity);
                 await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
+                // ReturnUrl varsa oraya gönder (anket fill URL öncelikli)
                 if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
                     return Redirect(returnUrl);
 
