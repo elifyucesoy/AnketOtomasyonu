@@ -4,6 +4,7 @@ using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
@@ -118,7 +119,13 @@ namespace AnketOtomasyonu.Controllers
             var model = new SurveyCreateViewModel();
 
             // Kullanıcının yetkili olduğu birimler (Claims'den)
-            model.AuthorizedUnits = User.FindAll("AuthorizedUnits").Select(c => c.Value).Distinct().ToList();
+            // Türkçe büyük/küçük harf duyarsız tekrar giderim (İ/i sorunu için)
+            var trCulture = new CultureInfo("tr-TR");
+            model.AuthorizedUnits = User.FindAll("AuthorizedUnits")
+                .Select(c => c.Value)
+                .GroupBy(x => x.ToUpper(trCulture))
+                .Select(g => g.First())
+                .ToList();
 
             // Eğer AuthorizedUnits boşsa PersonelBirim'i ekle
             if (!model.AuthorizedUnits.Any())
@@ -143,7 +150,12 @@ namespace AnketOtomasyonu.Controllers
                     Title = dto.Title,
                     Description = dto.Description
                 };
-                errorModel.AuthorizedUnits = User.FindAll("AuthorizedUnits").Select(c => c.Value).Distinct().ToList();
+                var trCult = new CultureInfo("tr-TR");
+                errorModel.AuthorizedUnits = User.FindAll("AuthorizedUnits")
+                    .Select(c => c.Value)
+                    .GroupBy(x => x.ToUpper(trCult))
+                    .Select(g => g.First())
+                    .ToList();
                 if (!errorModel.AuthorizedUnits.Any())
                 {
                     var ub = User.FindFirstValue("PersonelBirim");

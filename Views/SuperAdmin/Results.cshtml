@@ -27,9 +27,14 @@
         <h2><i class="bi bi-bar-chart me-2" style="color:#7c3aed;"></i>Raporlar & Sonuçlar</h2>
         <p class="text-muted mb-0">@Model.Title</p>
     </div>
-    <a asp-action="AllResults" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Sonuçlara Dön
-    </a>
+    <div class="d-flex gap-2">
+        <button onclick="downloadResultsPDF()" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF İndir
+        </button>
+        <a asp-action="AllResults" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Sonuçlara Dön
+        </a>
+    </div>
 </div>
 
 <!-- ÖZET KARTLARI -->
@@ -271,7 +276,7 @@ else
                                     <td>@(r.UserFullName ?? "-")</td>
                                     <td>@(r.FakulteAdi ?? "-")</td>
                                     <td>@(r.BolumAdi ?? "-")</td>
-                                    <td>@r.SubmittedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>@r.SubmittedAt.ToTurkeyDateTime()</td>
                                 </tr>
                             }
                         </tbody>
@@ -636,4 +641,100 @@ else
             }
         });
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script>
+function downloadResultsPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(124, 58, 237);
+    doc.text('@Html.Raw(Model.Title.Replace("'","\\'"))', 14, 16);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text('Rapor: ' + new Date().toLocaleDateString('tr-TR', {timeZone:'Europe/Istanbul'}) +
+             ' | Toplam Katilimci: @Model.TotalResponses', 14, 23);
+
+    var y = 28;
+
+    // Soru sonuçları
+    @foreach (var q in Model.Questions)
+    {
+        var qText = q.QuestionText.Replace("'", "\\'").Replace("\n", " ");
+        if (q.QuestionType == QuestionType.Likert || q.QuestionType == QuestionType.MultipleChoice)
+        {
+            <text>
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(50, 50, 50);
+    doc.text('@Html.Raw(qText)', 14, y + 6);
+    y += 4;
+    var optRows@(q.QuestionId) = [];
+            </text>
+            foreach (var opt in q.OptionResults)
+            {
+                var optText = opt.OptionText.Replace("'", "\\'");
+                <text>
+    optRows@(q.QuestionId).push(['@Html.Raw(optText)', '@opt.Count', '@opt.Percentage.ToString("F1")%']);
+                </text>
+            }
+            <text>
+    doc.autoTable({
+        startY: y + 6,
+        head: [['Secenek', 'Yanit', 'Yuzde']],
+        body: optRows@(q.QuestionId),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [124, 58, 237], textColor: 255 },
+        alternateRowStyles: { fillColor: [248, 245, 255] },
+        columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 25 }, 2: { cellWidth: 30 } },
+        margin: { left: 14 }
+    });
+    y = doc.lastAutoTable.finalY + 6;
+            </text>
+        }
+        else if (q.OpenEndedAnswers != null && q.OpenEndedAnswers.Count > 0)
+        {
+            <text>
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(50, 50, 50);
+    doc.text('@Html.Raw(qText)', 14, y + 6);
+    y += 10;
+    var oeRows@(q.QuestionId) = [];
+            </text>
+            foreach (var ans in q.OpenEndedAnswers.Take(20))
+            {
+                var safeAns = ans.Replace("'", "\\'").Replace("\n", " ").Replace("\r", "");
+                if (safeAns.Length > 120) safeAns = safeAns.Substring(0, 120) + "...";
+                <text>oeRows@(q.QuestionId).push(['@Html.Raw(safeAns)']);</text>
+            }
+            <text>
+    doc.autoTable({
+        startY: y,
+        head: [['Acik Uclu Cevaplar']],
+        body: oeRows@(q.QuestionId),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [13, 110, 253], textColor: 255 },
+        margin: { left: 14 }
+    });
+    y = doc.lastAutoTable.finalY + 6;
+            </text>
+        }
+    }
+
+    var pageCount = doc.internal.getNumberOfPages();
+    for (var i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(160);
+        doc.text('Selcuk Universitesi - Anket Otomasyonu | Sayfa ' + i + ' / ' + pageCount,
+            doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 8, { align: 'center' });
+    }
+    doc.save('anket-rapor-@(Model.SurveyId)-' + new Date().toISOString().slice(0,10) + '.pdf');
+}
+</script>
 }

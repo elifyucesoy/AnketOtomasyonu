@@ -8,16 +8,26 @@ namespace AnketOtomasyonu.Models.ViewModels
         public int ActiveSurveys { get; set; }
         public int DraftSurveys { get; set; }
         public int PendingApprovalCount { get; set; }
+        public int RejectedCount { get; set; }
         public int TotalResponses { get; set; }
         public int TotalAdminCount { get; set; }
 
         /// <summary>Seçili fakülte filtresi (null = tümü)</summary>
         public string? SelectedBirim { get; set; }
 
+        /// <summary>Durum filtresi: "active" | "draft" | "pending" | "rejected" | null</summary>
+        public string? StatusFilter { get; set; }
+
         /// <summary>Tüm mevcut birim/fakülte adları (filtre dropdown için)</summary>
         public List<string> AllBirimler { get; set; } = new();
 
         public List<SurveyListItemViewModel> Surveys { get; set; } = new();
+
+        // Sayfalama
+        public int CurrentPage { get; set; } = 1;
+        public int TotalCount { get; set; }
+        public int PageSize { get; set; } = 25;
+        public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
     }
 
     public class AdminPermissionViewModel
@@ -34,6 +44,13 @@ namespace AnketOtomasyonu.Models.ViewModels
         public List<AdminPermissionViewModel> Admins { get; set; } = new();
         public List<string> AllBirimler { get; set; } = new();
         public string? FilterBirim { get; set; }
+        public string? SearchName { get; set; }
+
+        // Sayfalama
+        public int CurrentPage { get; set; } = 1;
+        public int TotalCount { get; set; }
+        public int PageSize { get; set; } = 25;
+        public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
     }
 
     public class SuperAdminResultsViewModel
@@ -41,5 +58,11 @@ namespace AnketOtomasyonu.Models.ViewModels
         public string? SelectedBirim { get; set; }
         public List<string> AllBirimler { get; set; } = new();
         public List<SurveyListItemViewModel> Surveys { get; set; } = new();
+
+        // Tarih aralığı filtresi
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string? StartDateStr { get; set; }
+        public string? EndDateStr { get; set; }
     }
 }

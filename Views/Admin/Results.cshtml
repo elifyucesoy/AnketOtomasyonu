@@ -269,7 +269,7 @@
                                 <td class="ps-4 fw-bold">@(r.UserFullName ?? "Anonim")</td>
                                 <td>@r.FakulteAdi</td>
                                 <td>@r.BolumAdi</td>
-                                <td class="pe-4 text-muted">@r.SubmittedAt.ToString("g")</td>
+                                <td class="pe-4 text-muted">@r.SubmittedAt.ToTurkeyDateTime()</td>
                             </tr>
                         }
                     </tbody>

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -244,7 +245,12 @@ namespace AnketOtomasyonu.Controllers
                         if (!string.IsNullOrWhiteSpace(per.PersonelBirim))
                             authorizedUnits.Add(per.PersonelBirim);
                         authorizedUnits.AddRange(dbBirims);
-                        authorizedUnits = authorizedUnits.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                        // Türkçe İ/i sorunu için kültür bazlı tekrar giderimi
+                        var trComp = new CultureInfo("tr-TR");
+                        authorizedUnits = authorizedUnits
+                            .GroupBy(x => x.ToUpper(trComp))
+                            .Select(g => g.First())
+                            .ToList();
 
                         if (inYetkiTable)
                         {

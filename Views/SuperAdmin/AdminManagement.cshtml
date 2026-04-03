@@ -62,25 +62,38 @@
     <!-- ADMİN LİSTESİ -->
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Mevcut Adminler</h6>
-                <!-- Filtre -->
-                <form method="get" asp-action="AdminManagement" class="d-flex gap-2 align-items-center">
-                    <select name="filterBirim" class="form-select form-select-sm" style="max-width:200px;"
-                            onchange="this.form.submit()">
-                        <option value="">— Tüm Birimler —</option>
-                        @foreach (var b in Model.AllBirimler)
+            <div class="card-header bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Mevcut Adminler
+                        <span class="badge bg-secondary ms-1">@Model.TotalCount</span>
+                        @if (Model.TotalPages > 1)
                         {
-                            <option value="@b" selected="@(Model.FilterBirim == b ? "selected" : null)">@b</option>
+                            <small class="text-muted fw-normal ms-1">(Sayfa @Model.CurrentPage / @Model.TotalPages)</small>
                         }
-                    </select>
-                    @if (!string.IsNullOrEmpty(Model.FilterBirim))
-                    {
-                        <a asp-action="AdminManagement" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-x"></i>
-                        </a>
-                    }
-                </form>
+                    </h6>
+                    <!-- Filtre ve Arama -->
+                    <form method="get" asp-action="AdminManagement" class="d-flex gap-2 align-items-center flex-wrap">
+                        <div class="input-group input-group-sm" style="max-width:220px;">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" name="searchName" class="form-control form-control-sm"
+                                   placeholder="Ad / Kullanıcı Adı..." value="@Model.SearchName" />
+                        </div>
+                        <select name="filterBirim" class="form-select form-select-sm" style="max-width:190px;">
+                            <option value="">— Tüm Birimler —</option>
+                            @foreach (var b in Model.AllBirimler)
+                            {
+                                <option value="@b" selected="@(Model.FilterBirim == b ? "selected" : null)">@b</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
+                        @if (!string.IsNullOrEmpty(Model.FilterBirim) || !string.IsNullOrEmpty(Model.SearchName))
+                        {
+                            <a asp-action="AdminManagement" class="btn btn-sm btn-outline-secondary" title="Temizle">
+                                <i class="bi bi-x-circle"></i>
+                            </a>
+                        }
+                    </form>
+                </div>
             </div>
             <div class="card-body p-0">
                 @if (Model.Admins.Any())
@@ -132,10 +145,35 @@
                     </div>
                 }
             </div>
-            @if (Model.Admins.Any())
+            @if (Model.TotalCount > 0)
             {
-                <div class="card-footer bg-white text-muted small">
-                    Toplam <strong>@Model.Admins.Count</strong> admin
+                <div class="card-footer bg-white text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span>Toplam <strong>@Model.TotalCount</strong> admin</span>
+                    @if (Model.TotalPages > 1)
+                    {
+                        <nav class="d-flex gap-1">
+                            <a class="btn btn-sm btn-outline-secondary @(Model.CurrentPage <= 1 ? "disabled" : "")"
+                               href="@Url.Action("AdminManagement", "SuperAdmin", new { filterBirim = Model.FilterBirim, searchName = Model.SearchName, page = Model.CurrentPage - 1 })">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                            @for (int p = 1; p <= Model.TotalPages; p++)
+                            {
+                                if (p == 1 || p == Model.TotalPages || Math.Abs(p - Model.CurrentPage) <= 2)
+                                {
+                                    <a class="btn btn-sm @(p == Model.CurrentPage ? "btn-sa" : "btn-outline-secondary")"
+                                       href="@Url.Action("AdminManagement", "SuperAdmin", new { filterBirim = Model.FilterBirim, searchName = Model.SearchName, page = p })">@p</a>
+                                }
+                                else if (Math.Abs(p - Model.CurrentPage) == 3)
+                                {
+                                    <span class="px-1">…</span>
+                                }
+                            }
+                            <a class="btn btn-sm btn-outline-secondary @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")"
+                               href="@Url.Action("AdminManagement", "SuperAdmin", new { filterBirim = Model.FilterBirim, searchName = Model.SearchName, page = Model.CurrentPage + 1 })">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </nav>
+                    }
                 </div>
             }
         </div>

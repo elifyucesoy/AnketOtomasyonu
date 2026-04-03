@@ -3,6 +3,21 @@
 @model SuperAdminDashboardViewModel
 @{
     ViewData["Title"] = "SuperAdmin Dashboard";
+
+    // Helper: stat card URL
+    string CardUrl(string? sf) {
+        var b = Model.SelectedBirim ?? "";
+        return Url.Action("Dashboard", "SuperAdmin", new { birim = b, statusFilter = sf, page = 1 })!;
+    }
+
+    // Active filter label
+    var activeLabel = Model.StatusFilter switch {
+        "active"   => "Aktif",
+        "draft"    => "Taslak",
+        "pending"  => "Onay Bekleyen",
+        "rejected" => "Reddedilen",
+        _          => null
+    };
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -31,34 +46,46 @@
     </div>
 </div>
 
-<!-- İSTATİSTİK KARTLARI -->
+<!-- İSTATİSTİK KARTLARI (tıklanabilir filtreler) -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-2">
-        <div class="card stat-card text-center py-3">
+        <div class="card stat-card text-center py-3 @(Model.StatusFilter == null ? "border-sa" : "")">
             <i class="bi bi-clipboard2-data" style="font-size:1.8rem;color:#7c3aed;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.TotalSurveys</h3>
             <p class="text-muted small mb-0">Toplam Anket</p>
+            <a href="@CardUrl(null)" class="stretched-link" title="Tümünü Göster"></a>
         </div>
     </div>
     <div class="col-6 col-md-2">
-        <div class="card stat-card text-center py-3">
+        <div class="card stat-card text-center py-3 @(Model.StatusFilter == "active" ? "border-success border-2" : "")">
             <i class="bi bi-check-circle text-success" style="font-size:1.8rem;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.ActiveSurveys</h3>
             <p class="text-muted small mb-0">Aktif</p>
+            <a href="@CardUrl("active")" class="stretched-link" title="Aktif Anketler"></a>
         </div>
     </div>
     <div class="col-6 col-md-2">
-        <div class="card stat-card text-center py-3">
+        <div class="card stat-card text-center py-3 @(Model.StatusFilter == "draft" ? "border-warning border-2" : "")">
             <i class="bi bi-pencil-square text-warning" style="font-size:1.8rem;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.DraftSurveys</h3>
             <p class="text-muted small mb-0">Taslak</p>
+            <a href="@CardUrl("draft")" class="stretched-link" title="Taslak Anketler"></a>
         </div>
     </div>
     <div class="col-6 col-md-2">
-        <div class="card stat-card text-center py-3">
+        <div class="card stat-card text-center py-3 @(Model.StatusFilter == "pending" ? "border-danger border-2" : "")">
             <i class="bi bi-hourglass-split text-danger" style="font-size:1.8rem;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.PendingApprovalCount</h3>
             <p class="text-muted small mb-0">Onay Bekleyen</p>
+            <a href="@CardUrl("pending")" class="stretched-link" title="Onay Bekleyen Anketler"></a>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card stat-card text-center py-3 @(Model.StatusFilter == "rejected" ? "border-secondary border-2" : "")">
+            <i class="bi bi-x-circle text-secondary" style="font-size:1.8rem;"></i>
+            <h3 class="fw-bold mt-1 mb-0">@Model.RejectedCount</h3>
+            <p class="text-muted small mb-0">Reddedilen</p>
+            <a href="@CardUrl("rejected")" class="stretched-link" title="Reddedilen Anketler"></a>
         </div>
     </div>
     <div class="col-6 col-md-2">
@@ -68,33 +95,32 @@
             <p class="text-muted small mb-0">Yanıt</p>
         </div>
     </div>
-    <div class="col-6 col-md-2">
-        <div class="card stat-card text-center py-3">
-            <i class="bi bi-person-check-fill" style="font-size:1.8rem;color:#7c3aed;"></i>
-            <h3 class="fw-bold mt-1 mb-0">@Model.TotalAdminCount</h3>
-            <p class="text-muted small mb-0">Toplam Admin</p>
-        </div>
-    </div>
 </div>
 
-<!-- FAKÜLTE FİLTRESİ -->
+<!-- FAKÜLTE FİLTRESİ + AKTİF FİLTRE CHIP -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body py-3">
         <form method="get" asp-action="Dashboard" class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="hidden" name="statusFilter" value="@Model.StatusFilter" />
             <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Fakülte / Birim Filtrele:</label>
-            <select name="birim" class="form-select form-select-sm" style="max-width:320px;"
-                    onchange="this.form.submit()">
+            <select name="birim" class="form-select form-select-sm" style="max-width:320px;" onchange="this.form.submit()">
                 <option value="">— Tüm Fakülteler —</option>
                 @foreach (var b in Model.AllBirimler)
                 {
                     <option value="@b" selected="@(Model.SelectedBirim == b ? "selected" : null)">@b</option>
                 }
             </select>
-            @if (!string.IsNullOrEmpty(Model.SelectedBirim))
+            @if (!string.IsNullOrEmpty(Model.SelectedBirim) || !string.IsNullOrEmpty(Model.StatusFilter))
             {
                 <a asp-action="Dashboard" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-x-circle me-1"></i>Temizle
                 </a>
+            }
+            @if (!string.IsNullOrEmpty(activeLabel))
+            {
+                <span class="badge text-bg-light border ms-1 fs-6 fw-normal">
+                    <i class="bi bi-filter me-1"></i>@activeLabel filtresi aktif
+                </span>
             }
         </form>
     </div>
@@ -107,10 +133,20 @@
             <i class="bi bi-list-ul me-2"></i>Anketler
             @if (!string.IsNullOrEmpty(Model.SelectedBirim))
             {
-                <span class="badge bg-purple ms-2" style="background:#7c3aed !important;">@Model.SelectedBirim</span>
+                <span class="badge ms-2" style="background:#7c3aed !important;">@Model.SelectedBirim</span>
+            }
+            @if (!string.IsNullOrEmpty(activeLabel))
+            {
+                <span class="badge bg-secondary ms-1">@activeLabel</span>
             }
         </h5>
-        <span class="text-muted small">@Model.Surveys.Count kayıt</span>
+        <span class="text-muted small">
+            @Model.TotalCount kayıt
+            @if (Model.TotalPages > 1)
+            {
+                <span> · Sayfa @Model.CurrentPage / @Model.TotalPages</span>
+            }
+        </span>
     </div>
     <div class="card-body p-0">
         @if (Model.Surveys.Any())
@@ -195,15 +231,73 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- SAYFALAMA -->
+            @if (Model.TotalPages > 1)
+            {
+                <div class="card-footer bg-white d-flex justify-content-center align-items-center gap-1 py-3">
+                    @{
+                        var prevDisabled = Model.CurrentPage <= 1 ? "disabled" : "";
+                        var nextDisabled = Model.CurrentPage >= Model.TotalPages ? "disabled" : "";
+                    }
+                    <a class="btn btn-sm btn-outline-secondary @prevDisabled"
+                       href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, page = Model.CurrentPage - 1 })">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+
+                    @for (int p = 1; p <= Model.TotalPages; p++)
+                    {
+                        var isActive = p == Model.CurrentPage;
+                        if (p == 1 || p == Model.TotalPages || Math.Abs(p - Model.CurrentPage) <= 2)
+                        {
+                            <a class="btn btn-sm @(isActive ? "btn-sa" : "btn-outline-secondary")"
+                               href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, page = p })">
+                                @p
+                            </a>
+                        }
+                        else if (Math.Abs(p - Model.CurrentPage) == 3)
+                        {
+                            <span class="px-1 text-muted">…</span>
+                        }
+                    }
+
+                    <a class="btn btn-sm btn-outline-secondary @nextDisabled"
+                       href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, page = Model.CurrentPage + 1 })">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </div>
+            }
         }
         else
         {
             <div class="text-center py-5 text-muted">
                 <i class="bi bi-inbox" style="font-size:3rem;"></i>
                 <p class="mt-2">
-                    @(string.IsNullOrEmpty(Model.SelectedBirim) ? "Henüz anket yok." : $"'{Model.SelectedBirim}' birimine ait anket bulunamadı.")
+                    @if (!string.IsNullOrEmpty(activeLabel) || !string.IsNullOrEmpty(Model.SelectedBirim))
+                    {
+                        @("Seçilen kriterlere uygun anket bulunamadı.")
+                    }
+                    else
+                    {
+                        @("Henüz anket yok.")
+                    }
                 </p>
             </div>
         }
     </div>
 </div>
+
+@section Styles {
+    <style>
+        .stat-card {
+            cursor: pointer;
+            transition: transform .15s, box-shadow .15s;
+            position: relative;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 18px rgba(0,0,0,.12) !important;
+        }
+        .stat-card.border-sa { border: 2px solid #7c3aed !important; }
+    </style>
+}

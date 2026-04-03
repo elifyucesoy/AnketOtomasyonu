@@ -40,34 +40,58 @@ namespace AnketOtomasyonu.Controllers
 
         // ─── DASHBOARD ──────────────────────────────────────────────────────────
         [HttpGet]
-        public async Task<IActionResult> Dashboard(string? birim = null)
+        public async Task<IActionResult> Dashboard(string? birim = null, string? statusFilter = null, int page = 1)
         {
             var allSurveys = (await _surveyService.GetAllSurveysAsync()).ToList();
 
-            // Birim listesi artık appsettings.json'dan (BirimDondur servisi) geliyor
             var allBirimler = _birimService.GetAllNames();
 
-            // Filtre
+            // Birim filtresi
             var turkish = new CultureInfo("tr-TR");
-
-            var filtered = string.IsNullOrEmpty(birim)
+            var birimFiltered = string.IsNullOrEmpty(birim)
                 ? allSurveys
                 : allSurveys
                     .Where(s => turkish.CompareInfo.Compare(s.CreatedByBirim, birim, CompareOptions.IgnoreCase) == 0)
                     .ToList();
 
+            // Durum filtresi (stat kartlarından)
+            var statusFiltered = statusFilter switch
+            {
+                "active"   => birimFiltered.Where(s => s.Status == SurveyStatus.Active).ToList(),
+                "draft"    => birimFiltered.Where(s => s.Status == SurveyStatus.Draft
+                                                    && s.ApprovalStatus != ApprovalStatus.Pending).ToList(),
+                "pending"  => birimFiltered.Where(s => s.ApprovalStatus == ApprovalStatus.Pending).ToList(),
+                "rejected" => birimFiltered.Where(s => s.ApprovalStatus == ApprovalStatus.Rejected).ToList(),
+                _          => birimFiltered
+            };
+
+            // Sayfalama
+            const int pageSize = 25;
+            if (page < 1) page = 1;
+            var totalCount = statusFiltered.Count;
+            var paged = statusFiltered
+                .OrderByDescending(s => s.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
             var vm = new SuperAdminDashboardViewModel
             {
-                TotalSurveys = filtered.Count,
-                ActiveSurveys = filtered.Count(s => s.Status == SurveyStatus.Active),
-                DraftSurveys = filtered.Count(s => s.Status == SurveyStatus.Draft),
-                PendingApprovalCount = filtered.Count(s => s.ApprovalStatus == ApprovalStatus.Pending
-                                                        && s.Status == SurveyStatus.Draft),
-                TotalResponses = filtered.Sum(s => s.Responses.Count),
-                TotalAdminCount = await _db.AdminPermissions.CountAsync(),
-                SelectedBirim = birim,
-                AllBirimler = allBirimler,
-                Surveys = filtered.Select(s => MapToListItem(s)).ToList()
+                TotalSurveys        = birimFiltered.Count,
+                ActiveSurveys       = birimFiltered.Count(s => s.Status == SurveyStatus.Active),
+                DraftSurveys        = birimFiltered.Count(s => s.Status == SurveyStatus.Draft
+                                                            && s.ApprovalStatus != ApprovalStatus.Pending),
+                PendingApprovalCount = birimFiltered.Count(s => s.ApprovalStatus == ApprovalStatus.Pending),
+                RejectedCount       = birimFiltered.Count(s => s.ApprovalStatus == ApprovalStatus.Rejected),
+                TotalResponses      = birimFiltered.Sum(s => s.Responses.Count),
+                TotalAdminCount     = await _db.AdminPermissions.CountAsync(),
+                SelectedBirim  = birim,
+                StatusFilter   = statusFilter,
+                AllBirimler    = allBirimler,
+                CurrentPage    = page,
+                TotalCount     = totalCount,
+                PageSize       = pageSize,
+                Surveys        = paged.Select(s => MapToListItem(s)).ToList()
             };
 
             return View(vm);
@@ -145,23 +169,40 @@ namespace AnketOtomasyonu.Controllers
 
         // ─── SONUÇLAR ───────────────────────────────────────────────────────────
         [HttpGet]
-        public async Task<IActionResult> AllResults(string? birim = null)
+        public async Task<IActionResult> AllResults(string? birim = null, string? startDate = null, string? endDate = null)
         {
             var allSurveys = (await _surveyService.GetAllSurveysAsync()).ToList();
-
             var allBirimler = _birimService.GetAllNames();
 
-            var filtered = (string.IsNullOrEmpty(birim)
-                ? allSurveys
-                : allSurveys.Where(s => s.CreatedByBirim == birim).ToList())
+            // Türkiye saati ile tarih aralığı filtresi
+            var turkeyZone = TimeZoneInfo.FindSystemTimeZoneById(
+                System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)
+                    ? "Turkey Standard Time" : "Europe/Istanbul");
+
+            DateTime? start = null, end = null;
+            if (!string.IsNullOrEmpty(startDate) && DateTime.TryParseExact(startDate, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var sd))
+                start = sd;
+            if (!string.IsNullOrEmpty(endDate) && DateTime.TryParseExact(endDate, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var ed))
+                end = ed.AddDays(1).AddSeconds(-1); // gün sonu dahil
+
+            var filtered = allSurveys
+                .Where(s => string.IsNullOrEmpty(birim) || s.CreatedByBirim == birim)
                 .Where(s => s.Responses.Count > 0)
+                .Where(s => start == null || s.CreatedAt >= start)
+                .Where(s => end == null || s.CreatedAt <= end)
                 .ToList();
 
             var vm = new SuperAdminResultsViewModel
             {
                 SelectedBirim = birim,
                 AllBirimler = allBirimler,
-                Surveys = filtered.Select(s => MapToListItem(s)).ToList()
+                Surveys = filtered.Select(s => MapToListItem(s)).ToList(),
+                StartDate = start,
+                EndDate = end,
+                StartDateStr = startDate,
+                EndDateStr = endDate
             };
 
             return View(vm);
@@ -177,22 +218,39 @@ namespace AnketOtomasyonu.Controllers
 
         // ─── ADMİN YÖNETİMİ ────────────────────────────────────────────────────
         [HttpGet]
-        public async Task<IActionResult> AdminManagement(string? filterBirim = null)
+        public async Task<IActionResult> AdminManagement(string? filterBirim = null, string? searchName = null, int page = 1)
         {
             var admins = await _db.AdminPermissions
                 .OrderBy(a => a.PersonelBirim)
                 .ThenBy(a => a.Username)
                 .ToListAsync();
 
-            // Tüm birimler artık appsettings.json'dan
             var allBirimler = _birimService.GetAllNames();
 
             if (!string.IsNullOrEmpty(filterBirim))
                 admins = admins.Where(a => a.PersonelBirim == filterBirim).ToList();
 
+            if (!string.IsNullOrEmpty(searchName))
+            {
+                var q = searchName.ToLower(new System.Globalization.CultureInfo("tr-TR"));
+                admins = admins.Where(a =>
+                    a.Username.ToLower(new System.Globalization.CultureInfo("tr-TR")).Contains(q) ||
+                    (a.Note != null && a.Note.ToLower(new System.Globalization.CultureInfo("tr-TR")).Contains(q))
+                ).ToList();
+            }
+
+            // Sayfalama
+            const int pageSize = 25;
+            if (page < 1) page = 1;
+            var totalCount = admins.Count;
+            var paged = admins
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
             var vm = new AdminManagementViewModel
             {
-                Admins = admins.Select(a => new AdminPermissionViewModel
+                Admins = paged.Select(a => new AdminPermissionViewModel
                 {
                     Id = a.Id,
                     Username = a.Username,
@@ -200,8 +258,12 @@ namespace AnketOtomasyonu.Controllers
                     Note = a.Note,
                     CreatedAt = a.CreatedAt
                 }).ToList(),
-                AllBirimler = allBirimler,
-                FilterBirim = filterBirim
+                AllBirimler  = allBirimler,
+                FilterBirim  = filterBirim,
+                SearchName   = searchName,
+                CurrentPage  = page,
+                TotalCount   = totalCount,
+                PageSize     = pageSize
             };
 
             return View(vm);

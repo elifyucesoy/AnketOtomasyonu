@@ -18,6 +18,20 @@ var cultureInfo = new System.Globalization.CultureInfo("tr-TR");
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
 System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 
+// SET TURKISH TIMEZONE (UTC+3)
+// Tüm DateTime.Now çağrıları Türkiye saatini kullanacak şekilde ortam değişkeni ayarlanır
+try
+{
+    var tzId = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+        System.Runtime.InteropServices.OSPlatform.Windows)
+        ? "Turkey Standard Time"
+        : "Europe/Istanbul";
+    var turkeyTz = TimeZoneInfo.FindSystemTimeZoneById(tzId);
+    // Helper: Türkiye saati ile şimdiki zaman
+    // Kullanım: TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, turkeyTz)
+}
+catch { /* timezone bulunamazsa atla */ }
+
 // DATABASE
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(

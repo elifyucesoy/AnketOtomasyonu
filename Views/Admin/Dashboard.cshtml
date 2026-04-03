@@ -126,12 +126,19 @@
                                     }
                                     else
                                     {
-                                        <span class="badge @s.ApprovalBadgeClass" title="@s.ApprovalNote">
-                                            @s.ApprovalLabel
-                                        </span>
+                                        <span class="badge @s.ApprovalBadgeClass">@s.ApprovalLabel</span>
                                         @if (s.ApprovalStatus == ApprovalStatus.Rejected && !string.IsNullOrEmpty(s.ApprovalNote))
                                         {
-                                            <br /><small class="text-danger">@s.ApprovalNote</small>
+                                            <button type="button"
+                                                    class="btn btn-link p-0 ms-1 text-danger rejection-note-btn"
+                                                    data-bs-toggle="popover"
+                                                    data-bs-placement="left"
+                                                    data-bs-trigger="focus"
+                                                    data-bs-title="Ret Sebebi"
+                                                    data-bs-content="@s.ApprovalNote"
+                                                    title="Ret sebebini gör">
+                                                <i class="bi bi-exclamation-circle-fill"></i>
+                                            </button>
                                         }
                                     }
                                 </td>
@@ -287,6 +294,11 @@
 
 @section Scripts {
 <script>
+    // Bootstrap popover'ları başlat (ret sebepleri için)
+    document.querySelectorAll('.rejection-note-btn').forEach(function(el) {
+        new bootstrap.Popover(el, { html: false });
+    });
+
     // surveyId  : anket ID
     // isAnonymous : true/false (anonim mi?)
     // btn       : tıklanan button elementi
