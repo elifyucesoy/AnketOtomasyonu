@@ -1,3 +1,4 @@
+using AnketOtomasyonu.Authorization;
 using AnketOtomasyonu.Data;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
@@ -9,7 +10,7 @@ using System.Globalization;
 
 namespace AnketOtomasyonu.Controllers
 {
-    [Authorize(Policy = "ANKET_API_SUPERADMIN")]
+    [Authorize(Policy = AnketPermissions.SuperAdmin)]
     public class SuperAdminController : Controller
     {
         private readonly ISurveyService _surveyService;
