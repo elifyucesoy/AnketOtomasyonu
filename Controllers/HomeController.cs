@@ -108,7 +108,7 @@ namespace AnketOtomasyonu.Controllers
                     QuestionCount = s.Questions.Count,
                     ResponseCount = s.Responses.Count,
                     CreatedByName = s.CreatedByName,
-                    CreatedByBirim = s.CreatedByBirim,
+                    CreatedByBirim = s.CreatedByBirim ?? string.Empty,
                     CreatedAt = s.CreatedAt,
                     IsAnonymous = s.IsAnonymous,
                     TargetRoles = s.TargetRoles

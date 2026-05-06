@@ -1,4 +1,4 @@
-﻿using AnketOtomasyonu.Models.Entities;
+using AnketOtomasyonu.Models.Entities;
 
 namespace AnketOtomasyonu.Models.DTOs
 {
@@ -9,6 +9,22 @@ namespace AnketOtomasyonu.Models.DTOs
         public int TotalResponses { get; set; }
         public List<RespondentInfoDto> Respondents { get; set; } = new();
         public List<QuestionResultDto> Questions { get; set; } = new();
+        public List<DepartmentResultDto> DepartmentResults { get; set; } = new();
+        public List<FakulteResultDto> FakulteResults { get; set; } = new();
+    }
+
+    public class FakulteResultDto
+    {
+        public string? FakulteName { get; set; }
+        public int ResponseCount { get; set; }
+        public double AverageSatisfaction { get; set; }
+    }
+
+    public class DepartmentResultDto
+    {
+        public string? DepartmentName { get; set; }
+        public int ResponseCount { get; set; }
+        public double AverageSatisfaction { get; set; } // Likert tipi sorular için ağırlıklı ortalama
     }
 
     public class RespondentInfoDto
@@ -25,6 +41,7 @@ namespace AnketOtomasyonu.Models.DTOs
         public string QuestionText { get; set; } = string.Empty;
         public QuestionType QuestionType { get; set; }
         public int AnswerCount { get; set; }
+        public double AverageSatisfaction { get; set; } // Likert ort.
         public List<OptionResultDto> OptionResults { get; set; } = new();
         public List<string> OpenEndedAnswers { get; set; } = new();
     }

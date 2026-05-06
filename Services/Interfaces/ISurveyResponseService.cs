@@ -1,4 +1,4 @@
-﻿using AnketOtomasyonu.Models.DTOs;
+using AnketOtomasyonu.Models.DTOs;
 
 namespace AnketOtomasyonu.Services.Interfaces
 {
@@ -7,7 +7,7 @@ namespace AnketOtomasyonu.Services.Interfaces
         
         Task<bool> HasRespondedByIpAsync(int surveyId, string ipAddress); // ← YENİ
       
-        Task<SurveyResultDto> GetSurveyResultsAsync(int surveyId);
+        Task<SurveyResultDto> GetSurveyResultsAsync(int surveyId, string? fakulte = null, string? bolum = null);
         Task<bool> HasUserRespondedAsync(int surveyId, string userId);
         Task<(bool success, string message)> SubmitResponseAsync(
             SurveySubmitDto dto, string userId, string? ipAddress,

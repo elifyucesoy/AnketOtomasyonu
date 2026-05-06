@@ -30,7 +30,7 @@
     <div class="col-md-3">
         <div class="card border-0 shadow-sm text-center py-3">
             <h4 class="mb-0">@Model.ResponseCount</h4>
-            <small class="text-muted">Yanit</small>
+            <small class="text-muted">Yanıt</small>
         </div>
     </div>
     <div class="col-md-3">
@@ -48,7 +48,7 @@
     <div class="col-md-3">
         <div class="card border-0 shadow-sm text-center py-3">
             <small class="text-muted">Anonim</small><br />
-            <strong>@(Model.IsAnonymous ? "Evet" : "Hayir")</strong>
+            <strong>@(Model.IsAnonymous ? "Evet" : "Hayır")</strong>
         </div>
     </div>
 </div>
@@ -64,8 +64,8 @@
 {
     <form asp-controller="Survey" asp-action="Publish" asp-route-id="@Model.Id" method="post" class="mb-4">
         @Html.AntiForgeryToken()
-        <button type="submit" class="btn btn-success" onclick="return confirm('Anket yayinlansin mi?')">
-            <i class="bi bi-broadcast me-1"></i>Anketi Yayinla
+        <button type="submit" class="btn btn-success" onclick="return confirm('Anket yayınlansın mı?')">
+            <i class="bi bi-broadcast me-1"></i>Anketi Yayınla
         </button>
     </form>
 }

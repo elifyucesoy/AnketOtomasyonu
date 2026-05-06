@@ -1,13 +1,13 @@
 ﻿namespace AnketOtomasyonu.Authorization.Models
 {
     /// <summary>
-    /// Çoklu izin kontrolünde VE/VEYA mantığı.
-    /// And = Tüm izinlere sahip olmalı
-    /// Or = En az birine sahip olmalı
+    /// <c>POST .../Permission/HasPermission</c> gövdesindeki <c>operation</c> alanı (Swagger örneği: 0).
     /// </summary>
     public enum Operations
     {
-        And = 0,
-        Or = 1
+        /// <summary>En az bir <c>codes</c> öğesi (VEYA) — genelde <c>0</c>.</summary>
+        Or = 0,
+        /// <summary>Tüm <c>codes</c> öğeleri (VE) — genelde <c>1</c>.</summary>
+        And = 1
     }
 }

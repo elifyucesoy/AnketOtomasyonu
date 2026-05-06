@@ -33,6 +33,11 @@ namespace AnketOtomasyonu.Models.ViewModels
 
         [Display(Name = "Hedef Bölümler")]
         public List<string> TargetDepartments { get; set; } = new();
+        
+        [Display(Name = "Anketin Bağlı Olduğu Birim")]
+        public string? SelectedBirim { get; set; }
+
+        public List<string> AuthorizedUnits { get; set; } = new();
 
         public List<QuestionCreateViewModel> Questions { get; set; } = new();
 

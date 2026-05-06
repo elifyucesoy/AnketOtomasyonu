@@ -1,4 +1,4 @@
-﻿using AnketOtomasyonu.Models.Entities;
+using AnketOtomasyonu.Models.Entities;
 
 namespace AnketOtomasyonu.Models.ViewModels
 {
@@ -19,6 +19,7 @@ namespace AnketOtomasyonu.Models.ViewModels
         public DateTime? EndDate { get; set; }
         public bool IsAnonymous { get; set; }
         public string TargetRoles { get; set; } = string.Empty;
+        public List<string> TargetUnits { get; set; } = new();
 
         // Onay sistemi
         public ApprovalStatus ApprovalStatus { get; set; } = ApprovalStatus.Pending;

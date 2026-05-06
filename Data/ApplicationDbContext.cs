@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using AnketOtomasyonu.Models.Entities;
 
 namespace AnketOtomasyonu.Data
@@ -14,6 +14,7 @@ namespace AnketOtomasyonu.Data
         public DbSet<SurveyResponse> SurveyResponses { get; set; }
         public DbSet<SurveyAnswer> SurveyAnswers { get; set; }
         public DbSet<AdminPermission> AdminPermissions { get; set; }
+        public DbSet<SurveyBirim> SurveyBirimler { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -25,7 +26,8 @@ namespace AnketOtomasyonu.Data
                 entity.Property(e => e.Username).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.PersonelBirim).HasMaxLength(300).IsRequired();
                 entity.Property(e => e.Note).HasMaxLength(500);
-                entity.HasIndex(e => new { e.Username, e.PersonelBirim }).IsUnique();
+                // Unique constraint kaldırıldı: Aynı kullanıcı birden fazla birimde admin olabilir
+                entity.HasIndex(e => new { e.Username, e.PersonelBirim });
             });
 
             modelBuilder.Entity<Survey>(entity =>
@@ -46,6 +48,17 @@ namespace AnketOtomasyonu.Data
                       .WithOne(r => r.Survey)
                       .HasForeignKey(r => r.SurveyId)
                       .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(s => s.TargetUnits)
+                      .WithOne(pu => pu.Survey)
+                      .HasForeignKey(pu => pu.SurveyId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<SurveyBirim>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.SurveyId, e.Birim }).IsUnique();
             });
 
             modelBuilder.Entity<Question>(entity =>

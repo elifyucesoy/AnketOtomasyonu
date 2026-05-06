@@ -4,6 +4,90 @@
     ViewData["Title"] = Model.Title;
 }
 
+@section Styles {
+<style>
+/* ── Likert Slider ── */
+.likert-wrapper {
+    padding: 8px 0 4px;
+}
+.likert-slider-track {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+}
+.likert-slider-track input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(to right, #e53e3e, #ed8936, #f6c90e, #68d391, #38a169);
+    outline: none;
+    cursor: pointer;
+    margin: 8px 0;
+}
+.likert-slider-track input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid #6c63ff;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    transition: border-color .2s, box-shadow .2s;
+}
+.likert-slider-track input[type=range]::-webkit-slider-thumb:hover {
+    border-color: #4c46e0;
+    box-shadow: 0 3px 12px rgba(108,99,255,.4);
+}
+.likert-slider-track input[type=range]::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid #6c63ff;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.likert-label-box {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.likert-label-box span {
+    font-size: 0.72rem;
+    color: #666;
+    text-align: center;
+    flex: 1;
+}
+.likert-selected-label {
+    text-align: center;
+    margin-top: 10px;
+    min-height: 28px;
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.likert-selected-label .badge-likert {
+    display: inline-block;
+    padding: 5px 18px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: #f0edff;
+    color: #6c63ff;
+    border: 1px solid #d0c9ff;
+    transition: all .2s;
+}
+</style>
+}
+
 <div class="row justify-content-center">
     <div class="col-lg-8">
 
@@ -59,24 +143,40 @@
 
                         @if (q.Type == QuestionType.Likert)
                         {
-                            <div class="d-flex flex-wrap gap-3">
-                                @foreach (var o in q.Options.OrderBy(x => x.OrderIndex))
-                                {
-                                    <div class="form-check">
-                                        <input class="form-check-input likert-radio"
-                                               type="radio"
-                                               name="Answers[@i].SelectedOptionId"
-                                               value="@o.Id"
-                                               id="q@(q.QuestionId)_o@(o.Id)"
-                                               data-required="@q.IsRequired.ToString().ToLower()" />
-                                        <label class="form-check-label" for="q@(q.QuestionId)_o@(o.Id)">
-                                            @o.Text
-                                            <small class="text-muted">
-                                                @(o.Value.HasValue ? $"({o.Value})" : "")
-                                            </small>
-                                        </label>
-                                    </div>
-                                }
+                            var opts = q.Options.OrderBy(x => x.OrderIndex).ToList();
+                            var optCount = opts.Count;
+                            var sliderMax = optCount - 1;
+                            var midVal = sliderMax / 2;
+                            // hidden radios (gönderim için)
+                            foreach (var o in opts)
+                            {
+                                <input type="radio" class="d-none likert-radio"
+                                       name="Answers[@i].SelectedOptionId"
+                                       value="@o.Id"
+                                       id="q@(q.QuestionId)_o@(o.Id)"
+                                       data-required="@q.IsRequired.ToString().ToLower()" />
+                            }
+                            <div class="likert-wrapper">
+                                <div class="likert-slider-track">
+                                    <input type="range"
+                                           id="slider_q@(q.QuestionId)"
+                                           min="0" max="@sliderMax" step="1"
+                                           value="@midVal"
+                                           class="likert-range-input"
+                                           data-qid="@q.QuestionId"
+                                           data-opts="@string.Join(",", opts.Select(o => o.Id))"
+                                           data-names="@string.Join("|", opts.Select(o => o.Text))"
+                                           style="cursor:pointer;" />
+                                </div>
+                                <div class="likert-label-box">
+                                    @foreach (var o in opts)
+                                    {
+                                        <span>@o.Text</span>
+                                    }
+                                </div>
+                                <div class="likert-selected-label" id="lbl_q@(q.QuestionId)">
+                                    <span class="text-muted small">Lütfen bir değer seçin</span>
+                                </div>
                             </div>
                         }
                         else if (q.Type == QuestionType.MultipleChoice)
@@ -127,15 +227,6 @@
                                placeholder="?"
                                min="0" max="18"
                                autocomplete="off" />
-                        <div>
-                            <div class="progress" style="width:160px;height:6px;border-radius:3px;">
-                                <div id="timerFill"
-                                     class="progress-bar"
-                                     style="width:100%;background:#F9BC00;transition:width 1s linear;">
-                                </div>
-                            </div>
-                            <small id="timerText" class="text-muted">120 saniye</small>
-                        </div>
                     </div>
                     <input type="hidden" id="captchaResult" />
                     <div id="captchaError"
@@ -163,41 +254,34 @@
 @section Scripts {
     <script>
         var captchaCorrect = 0;
-        var totalSec = 120, remaining, timerInterval;
 
         function generateCaptcha() {
-            clearInterval(timerInterval);
             var a = Math.floor(Math.random() * 9) + 1;
             var b = Math.floor(Math.random() * 9) + 1;
             captchaCorrect = a + b;
-
             document.getElementById('captchaQuestion').textContent = a + ' + ' + b;
             document.getElementById('captchaAnswer').value = '';
             document.getElementById('captchaError').style.display = 'none';
-
-            remaining = totalSec;
-            var fill = document.getElementById('timerFill');
-            var txt  = document.getElementById('timerText');
-            fill.style.width = '100%';
-            fill.style.background = '#F9BC00';
-            txt.style.color = '';
-
-            timerInterval = setInterval(function () {
-                remaining--;
-                fill.style.width = (remaining / totalSec * 100) + '%';
-                txt.textContent = remaining + ' saniye';
-                if (remaining <= 30) {
-                    fill.style.background = '#dc3545';
-                    txt.style.color = '#dc3545';
-                }
-                if (remaining <= 0) {
-                    clearInterval(timerInterval);
-                    document.getElementById('captchaError').textContent = '⏰ Süre doldu. Yeni soru üretildi.';
-                    document.getElementById('captchaError').style.display = 'block';
-                    generateCaptcha();
-                }
-            }, 1000);
         }
+
+        // ── Likert slider logic ──
+        document.querySelectorAll('.likert-range-input').forEach(function(slider) {
+            var qid = slider.dataset.qid;
+            var optIds = slider.dataset.opts.split(',');
+            var optNames = slider.dataset.names.split('|');
+            var lblEl = document.getElementById('lbl_q' + qid);
+
+            function updateSlider(idx) {
+                var radio = document.getElementById('q' + qid + '_o' + optIds[idx]);
+                if (radio) radio.checked = true;
+                if (lblEl) {
+                    lblEl.innerHTML = '<span class="badge-likert">' + optNames[idx] + '</span>';
+                }
+            }
+
+            slider.addEventListener('input', function() { updateSlider(parseInt(this.value)); });
+            slider.addEventListener('change', function() { updateSlider(parseInt(this.value)); });
+        });
 
         generateCaptcha();
 
@@ -254,7 +338,6 @@
             }
 
             // Doğru — submit
-            clearInterval(timerInterval);
             var btn = document.getElementById('submitBtn');
             btn.disabled = true;
             btn.innerHTML = '<i class="bi bi-hourglass me-1"></i>Gönderiliyor...';

@@ -27,14 +27,17 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Kullanıcı Adı <span class="text-danger">*</span></label>
                         <div class="input-group">
-                            <input type="text" name="username" class="form-control"
+                            <input type="text" name="username" id="adminUsername" class="form-control"
                                    placeholder="ornek_kullanici" required maxlength="100" />
+                            <button type="button" class="btn btn-outline-primary" id="btnSearchLdap" title="Bilgileri LDAP'tan Getir">
+                                <i class="bi bi-search"></i>
+                            </button>
                         </div>
-                        <div class="form-text">Kurumsal mail adresi (@@'siz, örn: elif_yucesoy)</div>
+                        <div class="form-text">Kurumsal kullanıcı adı veya 11 haneli T.C. Kimlik No</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Fakülte / Birim <span class="text-danger">*</span></label>
-                        <select name="personelBirim" class="form-select" required>
+                        <select name="personelBirim" id="adminBirim" class="form-select" required>
                             <option value="">— Birim Seçiniz —</option>
                             @foreach (var b in Model.AllBirimler)
                             {
@@ -44,9 +47,9 @@
                         <div class="form-text">BirimDondur servisinden alınan birim listesi</div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small">Not (isteğe bağlı)</label>
-                        <input type="text" name="note" class="form-control" maxlength="200"
-                               placeholder="Örn: Bölüm Başkanı" />
+                        <label class="form-label fw-semibold small">Not / Ad-Soyad (isteğe bağlı)</label>
+                        <input type="text" name="note" id="adminNote" class="form-control" maxlength="200"
+                               placeholder="Bölüm Başkanı veya İsim" />
                     </div>
                     <button type="submit" class="btn btn-sa w-100">
                         <i class="bi bi-person-plus me-1"></i>Admin Yetkisi Ver
@@ -59,25 +62,38 @@
     <!-- ADMİN LİSTESİ -->
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Mevcut Adminler</h6>
-                <!-- Filtre -->
-                <form method="get" asp-action="AdminManagement" class="d-flex gap-2 align-items-center">
-                    <select name="filterBirim" class="form-select form-select-sm" style="max-width:200px;"
-                            onchange="this.form.submit()">
-                        <option value="">— Tüm Birimler —</option>
-                        @foreach (var b in Model.AllBirimler)
+            <div class="card-header bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Mevcut Adminler
+                        <span class="badge bg-secondary ms-1">@Model.TotalCount</span>
+                        @if (Model.TotalPages > 1)
                         {
-                            <option value="@b" selected="@(Model.FilterBirim == b ? "selected" : null)">@b</option>
+                            <small class="text-muted fw-normal ms-1">(Sayfa @Model.CurrentPage / @Model.TotalPages)</small>
                         }
-                    </select>
-                    @if (!string.IsNullOrEmpty(Model.FilterBirim))
-                    {
-                        <a asp-action="AdminManagement" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-x"></i>
-                        </a>
-                    }
-                </form>
+                    </h6>
+                    <!-- Filtre ve Arama -->
+                    <form method="get" asp-action="AdminManagement" class="d-flex gap-2 align-items-center flex-wrap">
+                        <div class="input-group input-group-sm" style="max-width:220px;">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" name="searchName" class="form-control form-control-sm"
+                                   placeholder="Ad / Kullanıcı Adı..." value="@Model.SearchName" />
+                        </div>
+                        <select name="filterBirim" class="form-select form-select-sm" style="max-width:190px;">
+                            <option value="">— Tüm Birimler —</option>
+                            @foreach (var b in Model.AllBirimler)
+                            {
+                                <option value="@b" selected="@(Model.FilterBirim == b ? "selected" : null)">@b</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i></button>
+                        @if (!string.IsNullOrEmpty(Model.FilterBirim) || !string.IsNullOrEmpty(Model.SearchName))
+                        {
+                            <a asp-action="AdminManagement" class="btn btn-sm btn-outline-secondary" title="Temizle">
+                                <i class="bi bi-x-circle"></i>
+                            </a>
+                        }
+                    </form>
+                </div>
             </div>
             <div class="card-body p-0">
                 @if (Model.Admins.Any())
@@ -129,12 +145,89 @@
                     </div>
                 }
             </div>
-            @if (Model.Admins.Any())
+            @if (Model.TotalCount > 0)
             {
-                <div class="card-footer bg-white text-muted small">
-                    Toplam <strong>@Model.Admins.Count</strong> admin
+                <div class="card-footer bg-white text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <span>Toplam <strong>@Model.TotalCount</strong> admin</span>
+                    @if (Model.TotalPages > 1)
+                    {
+                        <nav class="d-flex gap-1">
+                            <a class="btn btn-sm btn-outline-secondary @(Model.CurrentPage <= 1 ? "disabled" : "")"
+                               href="@Url.Action("AdminManagement", "SuperAdmin", new { filterBirim = Model.FilterBirim, searchName = Model.SearchName, page = Model.CurrentPage - 1 })">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                            @for (int p = 1; p <= Model.TotalPages; p++)
+                            {
+                                if (p == 1 || p == Model.TotalPages || Math.Abs(p - Model.CurrentPage) <= 2)
+                                {
+                                    <a class="btn btn-sm @(p == Model.CurrentPage ? "btn-sa" : "btn-outline-secondary")"
+                                       href="@Url.Action("AdminManagement", "SuperAdmin", new { filterBirim = Model.FilterBirim, searchName = Model.SearchName, page = p })">@p</a>
+                                }
+                                else if (Math.Abs(p - Model.CurrentPage) == 3)
+                                {
+                                    <span class="px-1">…</span>
+                                }
+                            }
+                            <a class="btn btn-sm btn-outline-secondary @(Model.CurrentPage >= Model.TotalPages ? "disabled" : "")"
+                               href="@Url.Action("AdminManagement", "SuperAdmin", new { filterBirim = Model.FilterBirim, searchName = Model.SearchName, page = Model.CurrentPage + 1 })">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </nav>
+                    }
                 </div>
             }
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('#btnSearchLdap').click(function () {
+                const username = $('#adminUsername').val();
+                if (!username) {
+                    alert('Lütfen önce bir kullanıcı adı girin.');
+                    return;
+                }
+
+                const btn = $(this);
+                const originalIcon = btn.html();
+                btn.html('<span class="spinner-border spinner-border-sm"></span>').prop('disabled', true);
+
+                $.get('/SuperAdmin/GetPersonelInfo', { username: username })
+                    .done(function (res) {
+                        if (res.success) {
+                            // Birimi seç
+                            if (res.birim) {
+                                let found = false;
+                                $('#adminBirim option').each(function() {
+                                    if ($(this).val().toUpperCase() === res.birim.toUpperCase()) {
+                                        $(this).prop('selected', true);
+                                        found = true;
+                                    }
+                                });
+                                
+                                if (!found) {
+                                   // Eğer tam eşleşme yoksa yeni bir option ekle (geçici)
+                                   $('#adminBirim').append(new Option(res.birim, res.birim, true, true));
+                                }
+                            }
+                            
+                            // Not kısmına ad soyad yaz
+                            $('#adminNote').val(res.ad + ' ' + res.soyad);
+                            
+                            toastr?.success('Bilgiler LDAP üzerinden getirildi.');
+                        } else {
+                            alert(res.message || 'Bilgi getirilemedi.');
+                        }
+                    })
+                    .fail(function () {
+                        alert('Sunucu iletişim hatası oluştu.');
+                    })
+                    .always(function () {
+                        btn.html(originalIcon).prop('disabled', false);
+                    });
+            });
+        });
+    </script>
+}
