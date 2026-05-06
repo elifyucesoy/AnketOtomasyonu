@@ -23,6 +23,7 @@ namespace AnketOtomasyonu.Services.Implementations
                 .Include(s => s.Questions.OrderBy(q => q.OrderIndex))
                     .ThenInclude(q => q.Options.OrderBy(o => o.OrderIndex))
                 .Include(s => s.Responses)
+                .Include(s => s.TargetUnits)
                 .FirstOrDefaultAsync(s => s.Id == surveyId);
         }
 
@@ -31,6 +32,7 @@ namespace AnketOtomasyonu.Services.Implementations
             return await _context.Surveys
                 .Include(s => s.Questions)
                 .Include(s => s.Responses)
+                .Include(s => s.TargetUnits)
                 .OrderByDescending(s => s.CreatedAt)
                 .ToListAsync();
         }
@@ -42,6 +44,7 @@ namespace AnketOtomasyonu.Services.Implementations
                 .Where(s => s.Status == SurveyStatus.Active)
                 .Include(s => s.Questions)
                 .Include(s => s.Responses)
+                .Include(s => s.TargetUnits)
                 .OrderByDescending(s => s.CreatedAt)
                 .ToListAsync();
         }
@@ -56,6 +59,7 @@ namespace AnketOtomasyonu.Services.Implementations
                     && (s.EndDate == null || s.EndDate >= now))
                 .Include(s => s.Questions)
                 .Include(s => s.Responses)
+                .Include(s => s.TargetUnits)
                 .OrderByDescending(s => s.CreatedAt)
                 .ToListAsync();
         }
@@ -66,6 +70,7 @@ namespace AnketOtomasyonu.Services.Implementations
                 .Where(s => s.CreatedByUserId == creatorUserId)
                 .Include(s => s.Questions)
                 .Include(s => s.Responses)
+                .Include(s => s.TargetUnits)
                 .OrderByDescending(s => s.CreatedAt)
                 .ToListAsync();
         }
@@ -73,9 +78,10 @@ namespace AnketOtomasyonu.Services.Implementations
         public async Task<IEnumerable<Survey>> GetSurveysByBirimAsync(string birim)
         {
             return await _context.Surveys
-                .Where(s => s.CreatedByBirim == birim)
+                .Where(s => s.TargetUnits.Any(pu => pu.Birim == birim))
                 .Include(s => s.Questions)
                 .Include(s => s.Responses)
+                .Include(s => s.TargetUnits)
                 .OrderByDescending(s => s.CreatedAt)
                 .ToListAsync();
         }
@@ -86,15 +92,16 @@ namespace AnketOtomasyonu.Services.Implementations
                 return Enumerable.Empty<Survey>();
 
             return await _context.Surveys
-                .Where(s => s.CreatedByBirim != null && birims.Contains(s.CreatedByBirim))
+                .Where(s => s.TargetUnits.Any(pu => birims.Contains(pu.Birim)))
                 .Include(s => s.Questions)
                 .Include(s => s.Responses)
+                .Include(s => s.TargetUnits)
                 .OrderByDescending(s => s.CreatedAt)
                 .ToListAsync();
         }
 
         public async Task<Survey> CreateSurveyAsync(
-            SurveyCreateDto dto, string creatorUserId, string creatorName, string? creatorBirim = null)
+            SurveyCreateDto dto, string creatorUserId, string creatorName, string? creatorBirim = null, bool isSuperAdmin = false)
         {
             var survey = new Survey
             {
@@ -116,8 +123,20 @@ namespace AnketOtomasyonu.Services.Implementations
                 CreatedByName = creatorName ?? string.Empty,
                 CreatedByBirim = dto.CreatedByBirim ?? creatorBirim ?? string.Empty,
                 Status = SurveyStatus.Draft,
+                ApprovalStatus = isSuperAdmin ? ApprovalStatus.Approved : ApprovalStatus.Pending,
+                ApprovalNote = isSuperAdmin ? "SuperAdmin tarafından oluşturuldu" : null,
+                ApprovedAt = isSuperAdmin ? DateTime.UtcNow : null,
                 CreatedAt = DateTime.UtcNow
             };
+
+            // TargetUnits set up based on TargetFaculties
+            if (dto.TargetFaculties != null && dto.TargetFaculties.Any())
+            {
+                foreach (var b in dto.TargetFaculties)
+                {
+                    survey.TargetUnits.Add(new SurveyBirim { Birim = b.Trim() });
+                }
+            }
 
             int order = 1;
             foreach (var qDto in dto.Questions)
@@ -174,7 +193,7 @@ namespace AnketOtomasyonu.Services.Implementations
         {
             var s = await _context.Surveys.FindAsync(surveyId);
             if (s == null) return;
-            s.Status = SurveyStatus.Closed;
+            s.Status = SurveyStatus.Inactive;   // Kapalı kaldırıldı → Pasif
             s.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
@@ -187,9 +206,10 @@ namespace AnketOtomasyonu.Services.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task UpdateSurveyAsync(int surveyId, SurveyCreateDto dto)
+        public async Task UpdateSurveyAsync(int surveyId, SurveyCreateDto dto, bool resetToApproval = false)
         {
             var survey = await _context.Surveys
+                .Include(s => s.TargetUnits)
                 .Include(s => s.Questions)
                     .ThenInclude(q => q.Options)
                 .FirstOrDefaultAsync(s => s.Id == surveyId);
@@ -203,8 +223,49 @@ namespace AnketOtomasyonu.Services.Implementations
             survey.StartDate = dto.StartDate;
             survey.EndDate = dto.EndDate;
             survey.TargetRoles = string.Join(",", dto.TargetRoles);
+            survey.TargetFaculties = dto.TargetFaculties != null && dto.TargetFaculties.Any()
+                ? string.Join(",", dto.TargetFaculties)
+                : null;
+            survey.TargetDepartments = dto.TargetDepartments != null && dto.TargetDepartments.Any()
+                ? string.Join(",", dto.TargetDepartments)
+                : null;
             survey.CreatedByBirim = dto.CreatedByBirim;
             survey.UpdatedAt = DateTime.UtcNow;
+
+            _context.SurveyBirimler.RemoveRange(survey.TargetUnits);
+            if (dto.TargetFaculties != null && dto.TargetFaculties.Any())
+            {
+                foreach (var b in dto.TargetFaculties)
+                {
+                    survey.TargetUnits.Add(new SurveyBirim { Birim = b.Trim() });
+                }
+            }
+
+            // Admin düzenlemesi → onaya gönder (Taslak + Pending)
+            if (resetToApproval)
+            {
+                survey.Status = SurveyStatus.Draft;
+                survey.ApprovalStatus = ApprovalStatus.Pending;
+                survey.ApprovalNote = "Düzenlendi (Onay Bekliyor)";
+                survey.ApprovedAt = null;
+            }
+            else
+            {
+                // SuperAdmin düzenlemesi veya otomatik onay durumu
+                survey.ApprovalNote = "Düzenlendi (SuperAdmin tarafından)";
+            }
+
+            // FK ihlali önlemi: Eski cevapları sil (SurveyAnswers → SelectedOptionId FK)
+            // SurveyResponse silmek cascade ile SurveyAnswer'ları da siler
+            var responses = await _context.SurveyResponses
+                .Where(r => r.SurveyId == surveyId)
+                .ToListAsync();
+            if (responses.Any())
+            {
+                _context.SurveyResponses.RemoveRange(responses);
+                await _context.SaveChangesAsync(); // Önce cevapların silindiğini DB'ye işle!
+                _logger.LogInformation("Anket düzenlendi, {N} eski cevap silindi. SurveyId={Id}", responses.Count, surveyId);
+            }
 
             // Eski soruları ve seçenekleri sil
             foreach (var q in survey.Questions.ToList())

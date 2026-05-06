@@ -15,8 +15,22 @@ namespace AnketOtomasyonu.Models.ViewModels
         /// <summary>Seçili fakülte filtresi (null = tümü)</summary>
         public string? SelectedBirim { get; set; }
 
-        /// <summary>Durum filtresi: "active" | "draft" | "pending" | "rejected" | null</summary>
-        public string? StatusFilter { get; set; }
+        /// <summary>Anket durum filtresi: "active" | "draft" | "inactive" | "closed" | null</summary>
+        public string? SurveyStatusFilter { get; set; }
+
+        /// <summary>View uyumluluğu için alias (Dashboard.cshtml Model.StatusFilter kullanır)</summary>
+        public string? StatusFilter
+        {
+            get => SurveyStatusFilter;
+            set => SurveyStatusFilter = value;
+        }
+
+        /// <summary>Onay durum filtresi: "approved" | "pending" | "rejected" | null</summary>
+        public string? ApprovalFilter { get; set; }
+
+        /// <summary>Tarih aralığı filtresi</summary>
+        public string? StartDateStr { get; set; }
+        public string? EndDateStr { get; set; }
 
         /// <summary>Tüm mevcut birim/fakülte adları (filtre dropdown için)</summary>
         public List<string> AllBirimler { get; set; } = new();

@@ -167,6 +167,15 @@ namespace AnketOtomasyonu.Services.Implementations
                         QuestionText = q.Text,
                         QuestionType = q.Type,
                         AnswerCount = answers.Count,
+                        AverageSatisfaction = q.Type == QuestionType.Likert && answers.Any(a => a.SelectedOptionId.HasValue)
+                            ? answers
+                                .Where(a => a.SelectedOptionId.HasValue)
+                                .Select(a => {
+                                    var opt = q.Options.FirstOrDefault(o => o.Id == a.SelectedOptionId);
+                                    return (double)(opt?.Value ?? 0);
+                                })
+                                .Average()
+                            : 0,
                         OptionResults = q.Options.Select(o => new OptionResultDto
                         {
                             OptionId = o.Id,

@@ -41,6 +41,7 @@ namespace AnketOtomasyonu.Models.DTOs
         public string QuestionText { get; set; } = string.Empty;
         public QuestionType QuestionType { get; set; }
         public int AnswerCount { get; set; }
+        public double AverageSatisfaction { get; set; } // Likert ort.
         public List<OptionResultDto> OptionResults { get; set; } = new();
         public List<string> OpenEndedAnswers { get; set; } = new();
     }

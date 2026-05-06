@@ -43,6 +43,12 @@
            style="background:#7c3aed;color:#fff;">
             <i class="bi bi-plus-circle me-1"></i>Yeni Anket
         </a>
+        <form asp-action="SyncUnitCatalog" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-outline-primary btn-sm" title="UnitList ve UnitTypeList önbelleğini API'den yeniler">
+                <i class="bi bi-arrow-repeat me-1"></i>Birimleri Senkronize Et
+            </button>
+        </form>
     </div>
 </div>
 

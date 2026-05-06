@@ -15,6 +15,19 @@ namespace AnketOtomasyonu.Models.ViewModels
         public List<string> AuthorizedUnits { get; set; } = new();
         public string? SelectedBirim { get; set; }
 
+        /// <summary>Anket durum filtresi: "active" | "draft" | "inactive" | "closed" | null</summary>
+        public string? SurveyStatusFilter { get; set; }
+        /// <summary>Onay durum filtresi: "approved" | "pending" | "rejected" | null</summary>
+        public string? ApprovalFilter { get; set; }
+        public string? StartDateStr { get; set; }
+        public string? EndDateStr { get; set; }
+
+        // Sayfalama
+        public int CurrentPage { get; set; } = 1;
+        public int TotalCount { get; set; }
+        public int PageSize { get; set; } = 25;
+        public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
+
         /// <summary>Son oluşturulan anketler (Dashboard'da liste için)</summary>
         public List<SurveyListItemViewModel> RecentSurveys { get; set; } = new();
     }
