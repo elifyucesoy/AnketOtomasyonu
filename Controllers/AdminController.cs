@@ -57,6 +57,30 @@ namespace AnketOtomasyonu.Controllers
             return RedirectToAction("Dashboard");
         }
 
+        /// <summary>
+        /// «Tüm birimler» (<c>__ALL__</c>) POST’ta sunucuda genişletilir: SuperAdmin için <c>null</c> (CachedUnits),
+        /// normal Admin için yetkili birim adları.
+        /// </summary>
+        private IReadOnlyList<string>? GetExpandAllTargetScopeForCurrentUser()
+        {
+            if (User.HasSuperAdminAccess())
+                return null;
+
+            var trCulture = new CultureInfo("tr-TR");
+            var units = User.FindAll("AuthorizedUnits")
+                .Select(c => c.Value)
+                .GroupBy(x => x.ToUpper(trCulture))
+                .Select(g => g.First())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
+            if (units.Count == 0)
+            {
+                var birim = User.FindFirstValue("PersonelBirim");
+                if (!string.IsNullOrEmpty(birim)) units.Add(birim);
+            }
+            return units;
+        }
+
         /// <summary>CreateSurvey / EditSurvey formları için ortak birim listesi ve yetkili birimler.</summary>
         private async Task HydrateSurveyCreateFormAsync(SurveyCreateViewModel model)
         {
@@ -266,7 +290,8 @@ namespace AnketOtomasyonu.Controllers
                 : (User.FindFirstValue("PersonelBirim") ?? "MERKEZ");
 
             var isSuperAdmin = User.HasSuperAdminAccess();
-            await _surveyService.CreateSurveyAsync(dto, createdById, createdByName, createdByBirim, isSuperAdmin);
+            var expandScope = GetExpandAllTargetScopeForCurrentUser();
+            await _surveyService.CreateSurveyAsync(dto, createdById, createdByName, createdByBirim, isSuperAdmin, expandScope);
 
             TempData["Success"] = "Anket başarıyla oluşturuldu. Yayınlamak için Yayınla butonuna tıklayın.";
             return RedirectToManagingDashboard();
@@ -400,7 +425,8 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction("EditSurvey", new { id });
             }
 
-            await _surveyService.UpdateSurveyAsync(id, dto);
+            var expandScope = GetExpandAllTargetScopeForCurrentUser();
+            await _surveyService.UpdateSurveyAsync(id, dto, false, expandScope);
             TempData["Success"] = "Anket başarıyla güncellendi.";
             return RedirectToManagingDashboard();
         }

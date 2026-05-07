@@ -1,4 +1,5 @@
 using AnketOtomasyonu.Data;
+using AnketOtomasyonu.Helpers;
 using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Services.Interfaces;
@@ -188,9 +189,49 @@ namespace AnketOtomasyonu.Services.Implementations
                 .ToListAsync();
         }
 
-        public async Task<Survey> CreateSurveyAsync(
-            SurveyCreateDto dto, string creatorUserId, string creatorName, string? creatorBirim = null, bool isSuperAdmin = false)
+        private async Task<List<string>> ResolveTargetFacultiesAsync(
+            List<string>? incoming,
+            IReadOnlyList<string>? expandAllTokenScope)
         {
+            if (incoming == null || incoming.Count == 0)
+                return new List<string>();
+
+            var trimmed = incoming
+                .Select(s => s?.Trim() ?? "")
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToList();
+
+            if (!SurveyTargetAllUnits.ContainsAllToken(trimmed))
+                return trimmed;
+
+            if (expandAllTokenScope != null && expandAllTokenScope.Count > 0)
+            {
+                return expandAllTokenScope
+                    .Select(s => s.Trim())
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return await _context.CachedUnits.AsNoTracking()
+                .Where(u => u.IsActive && !string.IsNullOrEmpty(u.Name))
+                .Select(u => u.Name.Trim())
+                .Distinct()
+                .OrderBy(n => n)
+                .ToListAsync();
+        }
+
+        public async Task<Survey> CreateSurveyAsync(
+            SurveyCreateDto dto,
+            string creatorUserId,
+            string creatorName,
+            string? creatorBirim = null,
+            bool isSuperAdmin = false,
+            IReadOnlyList<string>? expandAllTokenScope = null)
+        {
+            dto.TargetFaculties = await ResolveTargetFacultiesAsync(dto.TargetFaculties, expandAllTokenScope);
+
             var survey = new Survey
             {
                 Title = dto.Title?.Trim() ?? string.Empty,
@@ -296,8 +337,14 @@ namespace AnketOtomasyonu.Services.Implementations
             await _context.SaveChangesAsync();
         }
 
-        public async Task UpdateSurveyAsync(int surveyId, SurveyCreateDto dto, bool resetToApproval = false)
+        public async Task UpdateSurveyAsync(
+            int surveyId,
+            SurveyCreateDto dto,
+            bool resetToApproval = false,
+            IReadOnlyList<string>? expandAllTokenScope = null)
         {
+            dto.TargetFaculties = await ResolveTargetFacultiesAsync(dto.TargetFaculties, expandAllTokenScope);
+
             var survey = await _context.Surveys
                 .Include(s => s.TargetUnits)
                 .Include(s => s.Questions)

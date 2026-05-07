@@ -129,7 +129,7 @@
                         <label class="form-label fw-semibold">
                             <i class="bi bi-building me-1" style="color:#2563eb;"></i>Hedef birimler <span class="text-danger">*</span>
                         </label>
-                        <small class="text-muted d-block mb-2">Birden fazla seçebilirsiniz. «Tüm birimleri seç» yalnızca <strong>Tüm birimler</strong> etiketini gösterir; kayıtta tüm liste kullanılır. Tek birimde anket o birime bağlanır; çoklu / tümünde oluşturan birim <strong>MERKEZ</strong>.</small>
+                        <small class="text-muted d-block mb-2">Birden fazla seçebilirsiniz. «Tüm birimler» seçildiğinde forma yalnızca tek bir işaret gönderilir; tam birim listesi sunucuda üretilir (istek boyutu sınırına takılmaz). Tek birimde anket o birime bağlanır; çoklu / tümünde oluşturan birim <strong>MERKEZ</strong>.</small>
                         <select id="superAdminUnitSelect" name="TargetFaculties" multiple="multiple" class="form-select select2-unit-multi" style="width:100%;">
                             <option value="__ALL__">Tüm birimler</option>
                             @foreach (var u in unitListVb!)
@@ -150,7 +150,7 @@
                 {
                     <div class="col-12">
                         <label class="form-label fw-semibold"><i class="bi bi-building me-1" style="color:#2563eb;"></i>Hedef birimler <span class="text-danger">*</span></label>
-                        <small class="text-muted d-block mb-2">Yetkili birimlerinizden seçin. «Tümünü seç» yalnızca <strong>Tüm birimler</strong> görünür; gönderimde tüm yetkili birimler eklenir.</small>
+                        <small class="text-muted d-block mb-2">Yetkili birimlerinizden seçin. «Tüm birimler» seçildiğinde forma tek işaret gider; yetkili birimleriniz sunucuda tam listelenir.</small>
                         <select id="adminMultiUnitSelect" name="TargetFaculties" multiple="multiple" class="form-select select2-admin-units" style="width:100%;">
                             <option value="__ALL__">Tüm birimler</option>
                             @foreach (var birim in Model.AuthorizedUnits)
@@ -276,20 +276,6 @@
 
             var ALL_UNITS_TOKEN = '__ALL__';
 
-            /// Select2’de yalnızca «Tüm birimler» görünsün; POST’ta gerçek adlar gizli input ile gider.
-            function expandAllTokenToHiddenInputs($select, $form) {
-                var val = $select.val() || [];
-                if (val.indexOf(ALL_UNITS_TOKEN) < 0) return;
-                var fieldName = $select.attr('name');
-                $select.removeAttr('name').prop('disabled', true);
-                $select.find('option').filter(function () {
-                    var v = $(this).val();
-                    return v && v !== ALL_UNITS_TOKEN;
-                }).each(function () {
-                    $('<input>', { type: 'hidden', name: fieldName, value: $(this).val() }).appendTo($form);
-                });
-            }
-
             function syncSuperAdminUnitHidden() {
                 var sel = $('#superAdminUnitSelect').val() || [];
                 if (sel.length === 0) {
@@ -395,7 +381,6 @@
             }
 
             $('#createSurveyForm').on('submit', function (e) {
-                var $form = $(this);
                 if ($('#superAdminUnitSelect').length) {
                     var sel = $('#superAdminUnitSelect').val() || [];
                     if (sel.length === 0) {
@@ -403,7 +388,6 @@
                         alert('En az bir hedef birim seçmelisiniz.');
                         return false;
                     }
-                    expandAllTokenToHiddenInputs($('#superAdminUnitSelect'), $form);
                     syncSuperAdminUnitHidden();
                 }
                 if ($('#adminMultiUnitSelect').length) {
@@ -413,7 +397,6 @@
                         alert('En az bir hedef birim seçmelisiniz.');
                         return false;
                     }
-                    expandAllTokenToHiddenInputs($('#adminMultiUnitSelect'), $form);
                     syncAdminMultiHidden();
                 }
             });

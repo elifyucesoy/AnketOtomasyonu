@@ -31,7 +31,17 @@ namespace AnketOtomasyonu.Services.Interfaces
         Task<IReadOnlyList<SurveySummaryDto>> GetSurveySummariesByCreatorAsync(string creatorUserId);
         Task<IEnumerable<Survey>> GetSurveysByBirimAsync(string birim);
         Task<IEnumerable<Survey>> GetSurveysByBirimsAsync(List<string> birims);
-        Task<Survey> CreateSurveyAsync(SurveyCreateDto dto, string creatorUserId, string creatorName, string? creatorBirim = null, bool isSuperAdmin = false);
+        /// <param name="expandAllTokenScope">
+        /// «Tüm birimler» jetonu (<c>__ALL__</c>) genişletilirken kullanılacak birim adları.
+        /// <c>null</c>: CachedUnits içindeki tüm aktif birimler. Dolu liste: yalnızca bu adlar (yetkili birimler).
+        /// </param>
+        Task<Survey> CreateSurveyAsync(
+            SurveyCreateDto dto,
+            string creatorUserId,
+            string creatorName,
+            string? creatorBirim = null,
+            bool isSuperAdmin = false,
+            IReadOnlyList<string>? expandAllTokenScope = null);
         Task PublishSurveyAsync(int surveyId);
         Task CloseSurveyAsync(int surveyId);
         Task DeleteSurveyAsync(int surveyId);
@@ -39,6 +49,10 @@ namespace AnketOtomasyonu.Services.Interfaces
         /// Anketi günceller. resetToApproval=true ise durum Taslak'a çekilir ve
         /// onay durumu Pending'e sıfırlanır (Admin düzenlemelerinde kullanılır).
         /// </summary>
-        Task UpdateSurveyAsync(int surveyId, SurveyCreateDto dto, bool resetToApproval = false);
+        Task UpdateSurveyAsync(
+            int surveyId,
+            SurveyCreateDto dto,
+            bool resetToApproval = false,
+            IReadOnlyList<string>? expandAllTokenScope = null);
     }
 }
