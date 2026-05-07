@@ -23,6 +23,10 @@
         .OrderByDescending(x => x.Count)
         .Take(15) // Çok fazla bölüm varsa ilk 15'i göster
         .ToList();
+
+    var dashboardUrl = User.HasSuperAdminAccess()
+        ? Url.Action("Dashboard", "SuperAdmin")
+        : Url.Action("Dashboard", "Admin");
 }
 
 <style>
@@ -52,7 +56,7 @@
             <h1 class="h2 fw-bold text-selcuk mb-1"><i class="bi bi-pie-chart-fill me-2"></i>Anket Analiz Paneli</h1>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item"><a href="@Url.Action("Dashboard")">Panel</a></li>
+                    <li class="breadcrumb-item"><a href="@dashboardUrl">Panel</a></li>
                     <li class="breadcrumb-item active">@Model.Title</li>
                 </ol>
             </nav>
@@ -61,7 +65,7 @@
             <button onclick="window.print()" class="btn btn-white border px-4 rounded-start">
                 <i class="bi bi-printer me-2"></i>PDF / Yazdır
             </button>
-            <a href="@Url.Action("Dashboard")" class="btn btn-dark px-4 rounded-end">
+            <a href="@dashboardUrl" class="btn btn-dark px-4 rounded-end">
                 <i class="bi bi-arrow-left me-2"></i>Listeye Dön
             </a>
         </div>
@@ -112,7 +116,7 @@
                 <img src="/img/no-data.svg" alt="No data" style="width: 200px; opacity: 0.5;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/7486/7486744.png'">
                 <h3 class="mt-4 fw-bold text-muted">Henüz Veri Toplanmadı</h3>
                 <p class="text-muted">Bu anket için seçili kriterlerde herhangi bir yanıt bulunamadı.</p>
-                <a href="@Url.Action("Dashboard")" class="btn btn-primary rounded-pill px-5 mt-3 shadow">Geri Dön</a>
+                <a href="@dashboardUrl" class="btn btn-primary rounded-pill px-5 mt-3 shadow">Geri Dön</a>
             </div>
         </div>
     }

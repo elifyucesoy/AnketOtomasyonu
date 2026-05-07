@@ -67,6 +67,10 @@ namespace AnketOtomasyonu.Controllers
                 // Giriş yapmamış kullanıcı da tüm AKTİF anketleri görür (ama doldurmak için login gerekecek)
             }
 
+            var surveyRows = surveys.ToList();
+            var targetUnitMap = await _surveyService.GetTargetUnitNamesBySurveyIdsAsync(
+                surveyRows.Select(s => s.Id).ToList());
+
             var vm = new SurveyIndexViewModel
             {
                 UserFullName = User.FindFirstValue(ClaimTypes.Name),
@@ -76,7 +80,7 @@ namespace AnketOtomasyonu.Controllers
                     || User.HasAnketPermission(AnketPermissions.Admin)
                     || userRole == "SuperAdmin" || userRole == "Admin",
                 PreferSuperAdminSurveyLinks = hasSuperClaim || userRole == "SuperAdmin",
-                Surveys = surveys.Select(s => new SurveyListItemViewModel
+                Surveys = surveyRows.Select(s => new SurveyListItemViewModel
                 {
                     Id = s.Id,
                     Title = s.Title,
@@ -102,7 +106,8 @@ namespace AnketOtomasyonu.Controllers
                     CreatedByBirim = s.CreatedByBirim ?? string.Empty,
                     CreatedAt = s.CreatedAt,
                     IsAnonymous = s.IsAnonymous,
-                    TargetRoles = s.TargetRoles
+                    TargetRoles = s.TargetRoles,
+                    TargetUnits = SurveyTargetUnitsHelper.Resolve(s, targetUnitMap)
                 }).ToList()
             };
 

@@ -247,8 +247,27 @@ else
                             }
                         </div>
 
+                        @if (survey.TargetUnits.Count > 0)
+                        {
+                            <div class="w-100 mb-2 px-1">
+                                <div class="small fw-semibold text-muted mb-1" style="font-size:0.7rem;">
+                                    <i class="bi bi-bullseye me-1"></i>Hedef birimler
+                                </div>
+                                <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                    @foreach (var u in survey.TargetUnits.Take(10))
+                                    {
+                                        <span class="badge rounded-pill bg-white text-dark border shadow-sm" style="font-size:0.62rem;max-width:100%;text-overflow:ellipsis;overflow:hidden;">@u</span>
+                                    }
+                                    @if (survey.TargetUnits.Count > 10)
+                                    {
+                                        <span class="small text-muted align-self-center" style="font-size:0.65rem;">+@(survey.TargetUnits.Count - 10)</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+
                         <div class="mb-2">
-                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
+                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;" title="Anketi oluşturan birim">
                                 <i class="bi bi-building me-1"></i>@survey.CreatedByBirim
                             </span>
                         </div>

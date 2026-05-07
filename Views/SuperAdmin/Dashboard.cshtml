@@ -20,12 +20,12 @@
     };
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-start align-items-sm-center flex-wrap gap-3 mb-4">
     <div>
         <h2 class="mb-0"><i class="bi bi-shield-fill-check me-2" style="color:#7c3aed;"></i>SuperAdmin Paneli</h2>
         <small class="text-muted">Tüm fakültelerin anketlerini görüntüle ve yönet</small>
     </div>
-    <div class="d-flex gap-2 align-items-center">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
         @if (Model.PendingApprovalCount > 0)
         {
             <a asp-action="SurveyApprovals" class="btn btn-warning fw-bold">
@@ -108,9 +108,9 @@
     <div class="card-body py-3">
         <form method="get" asp-action="Dashboard" class="d-flex gap-2 align-items-center flex-wrap">
             <input type="hidden" name="statusFilter" value="@Model.StatusFilter" />
-            <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Fakülte / Birim Filtrele:</label>
+            <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Birim:</label>
             <select name="birim" class="form-select form-select-sm" style="max-width:320px;" onchange="this.form.submit()">
-                <option value="">— Tüm Fakülteler —</option>
+                <option value="">Tüm birimler</option>
                 @foreach (var b in Model.AllBirimler)
                 {
                     <option value="@b" selected="@(Model.SelectedBirim == b ? "selected" : null)">@b</option>
@@ -140,6 +140,10 @@
             @if (!string.IsNullOrEmpty(Model.SelectedBirim))
             {
                 <span class="badge ms-2" style="background:#7c3aed !important;">@Model.SelectedBirim</span>
+            }
+            else
+            {
+                <span class="badge ms-2 text-bg-light border">Tüm birimler</span>
             }
             @if (!string.IsNullOrEmpty(activeLabel))
             {
@@ -193,58 +197,71 @@
                                         var fillPath = Url.Action("Fill", "SurveyResponse", new { id = s.Id })!;
                                         var fillAbs = $"{Context.Request.Scheme}://{Context.Request.Host}{fillPath}";
                                     }
-                                    <div class="sa-toolbar" role="group" aria-label="Anket işlemleri">
-                                        <a asp-action="PreviewSurvey" asp-route-id="@s.Id"
-                                           class="sa-act sa-act--eye" title="Önizle"><i class="bi bi-eye"></i></a>
-                                        <button type="button"
-                                                class="sa-act sa-act--link js-copy-survey-url"
-                                                data-url="@fillAbs"
-                                                title="@(s.IsAnonymous ? "Doldurma adresini kopyala (anonim)" : "Doldurma adresini kopyala — anonim değil, giriş gerekir")">
-                                            <i class="bi bi-link-45deg" aria-hidden="true"></i>
-                                        </button>
-                                        <a asp-controller="Admin" asp-action="EditSurvey" asp-route-id="@s.Id"
-                                           class="sa-act sa-act--edit" title="Düzenle"><i class="bi bi-pencil"></i></a>
-                                        <a asp-action="Results" asp-route-id="@s.Id"
-                                           class="sa-act sa-act--chart" title="Sonuçlar"><i class="bi bi-bar-chart"></i></a>
-                                        @if (s.Status == "Aktif")
-                                        {
-                                            <form asp-controller="Admin" asp-action="Close" asp-route-id="@s.Id"
-                                                  method="post" class="sa-act-form">
-                                                @Html.AntiForgeryToken()
-                                                <button type="submit" class="sa-act sa-act--stop" title="Kapat"
-                                                        onclick="return confirm('Anket kapatılsın mı?');">
-                                                    <i class="bi bi-stop-circle"></i>
-                                                </button>
-                                            </form>
-                                        }
-                                        else
-                                        {
-                                            <span class="sa-act sa-act--stop-off" title="Yalnızca aktif ankette kullanılır"><i class="bi bi-stop-circle"></i></span>
-                                        }
-                                        <form asp-controller="Admin" asp-action="Delete" asp-route-id="@s.Id"
-                                              method="post" class="sa-act-form"
-                                              onsubmit="return confirm('Bu anket kalıcı olarak silinsin mi?');">
-                                            @Html.AntiForgeryToken()
-                                            <button type="submit" class="sa-act sa-act--trash" title="Sil"><i class="bi bi-trash"></i></button>
-                                        </form>
-                                    </div>
-                                    @if (s.ApprovalStatus == ApprovalStatus.Pending || (s.Status == "Taslak" && s.ApprovalStatus == ApprovalStatus.Approved))
-                                    {
-                                        <div class="sa-toolbar-extra mt-1">
-                                            @if (s.ApprovalStatus == ApprovalStatus.Pending)
+                                    <div class="sa-actions-stack">
+                                        <div class="sa-toolbar" role="group" aria-label="Anket işlemleri">
+                                            <a asp-action="PreviewSurvey" asp-route-id="@s.Id"
+                                               class="sa-act sa-act--eye" title="Önizle"><i class="bi bi-eye"></i></a>
+                                            <button type="button"
+                                                    class="sa-act sa-act--link js-copy-survey-url"
+                                                    data-url="@fillAbs"
+                                                    title="@(s.IsAnonymous ? "Doldurma adresini kopyala (anonim)" : "Doldurma adresini kopyala — anonim değil, giriş gerekir")">
+                                                <i class="bi bi-link-45deg sa-copy-icon" aria-hidden="true"></i>
+                                            </button>
+                                            <a asp-controller="Admin" asp-action="EditSurvey" asp-route-id="@s.Id"
+                                               class="sa-act sa-act--edit" title="Düzenle"><i class="bi bi-pencil"></i></a>
+                                            <a asp-action="Results" asp-route-id="@s.Id"
+                                               class="sa-act sa-act--chart" title="Sonuçlar"><i class="bi bi-bar-chart"></i></a>
+                                            @if (s.Status == "Aktif")
                                             {
-                                                <a asp-action="SurveyApprovals" class="badge text-bg-warning text-decoration-none">Onay</a>
-                                            }
-                                            @if (s.Status == "Taslak" && s.ApprovalStatus == ApprovalStatus.Approved)
-                                            {
-                                                <form asp-controller="Admin" asp-action="Publish" asp-route-id="@s.Id" method="post" class="d-inline">
+                                                <form asp-controller="Admin" asp-action="Close" asp-route-id="@s.Id"
+                                                      method="post" class="sa-act-form">
                                                     @Html.AntiForgeryToken()
-                                                    <button type="submit" class="badge border-0 text-bg-success"
-                                                            onclick="return confirm('Anket yayınlansın mı?');">Yayınla</button>
+                                                    <button type="submit" class="sa-act sa-act--stop" title="Kapat"
+                                                            onclick="return confirm('Anket kapatılsın mı?');">
+                                                        <i class="bi bi-stop-circle"></i>
+                                                    </button>
                                                 </form>
                                             }
+                                            else if (s.Status == "Taslak" || s.Status == "Pasif")
+                                            {
+                                                <form asp-controller="Admin" asp-action="Publish" asp-route-id="@s.Id"
+                                                      method="post" class="sa-act-form">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="sa-act sa-act--publish" title="Yayınla"
+                                                            onclick="return confirm('Anket yayınlansın mı?');">
+                                                        <i class="bi bi-broadcast"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                            else if (s.Status == "Kapalı")
+                                            {
+                                                <form asp-controller="Admin" asp-action="Republish" asp-route-id="@s.Id"
+                                                      method="post" class="sa-act-form">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="sa-act sa-act--publish" title="Tekrar yayınla"
+                                                            onclick="return confirm('Anket tekrar yayınlansın mı?');">
+                                                        <i class="bi bi-arrow-repeat"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <span class="sa-act sa-act--stop-off" title="Bu durumda yayın/kapat yok"><i class="bi bi-stop-circle"></i></span>
+                                            }
+                                            <form asp-controller="Admin" asp-action="Delete" asp-route-id="@s.Id"
+                                                  method="post" class="sa-act-form"
+                                                  onsubmit="return confirm('Bu anket kalıcı olarak silinsin mi?');">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="sa-act sa-act--trash" title="Sil"><i class="bi bi-trash"></i></button>
+                                            </form>
                                         </div>
-                                    }
+                                        @if (s.ApprovalStatus == ApprovalStatus.Pending)
+                                        {
+                                            <div class="sa-toolbar-extra">
+                                                <a asp-action="SurveyApprovals" class="badge text-bg-warning text-decoration-none">Onay bekliyor</a>
+                                            </div>
+                                        }
+                                    </div>
                                 </td>
                             </tr>
                         }
@@ -320,24 +337,30 @@
         }
         .stat-card.border-sa { border: 2px solid #7c3aed !important; }
 
-        /* İşlem sütunu: sabit genişlik + taşma yok; 6 kare yan yana */
+        /* İşlem sütunu — alt satır (onay) üst satırla binmesin */
         .sa-col-actions,
         .sa-actions-cell {
             width: 1%;
-            min-width: 258px;
-            max-width: 258px;
+            min-width: 248px;
+            white-space: normal;
             vertical-align: middle;
-            white-space: nowrap;
             padding-left: .5rem !important;
             padding-right: .5rem !important;
+        }
+        .sa-actions-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
         }
         .sa-toolbar {
             display: flex;
             flex-wrap: nowrap;
             align-items: center;
-            justify-content: flex-start;
-            gap: 5px;
+            justify-content: flex-end;
+            gap: 4px;
             flex-shrink: 0;
+            white-space: nowrap;
         }
         .sa-act-form { display: inline-flex; margin: 0; padding: 0; flex-shrink: 0; }
         .sa-act {
@@ -346,14 +369,14 @@
             align-items: center;
             justify-content: center;
             flex: 0 0 auto;
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             padding: 0;
-            border-radius: 9px;
+            border-radius: 8px;
             border: 2px solid transparent;
             background: #fff;
             text-decoration: none !important;
-            font-size: 1rem;
+            font-size: .95rem;
             line-height: 1;
             transition: background .15s, filter .15s, opacity .15s;
         }
@@ -364,9 +387,24 @@
         }
         .sa-act--eye { border-color: #0d6efd; color: #0d6efd; }
         .sa-act--eye:hover { background: rgba(13,110,253,.08); color: #0d6efd; }
-        .sa-act--link { border-color: #adb5bd; color: #6c757d; }
+
+        .sa-act--link {
+            border-color: #adb5bd;
+            color: #6c757d;
+        }
         .sa-act--link:hover { background: #f8f9fa; color: #495057; }
-        .sa-act--copied { border-color: #198754 !important; color: #198754 !important; background: rgba(25,135,84,.1) !important; }
+        .sa-act--copied {
+            border-color: #198754 !important;
+            color: #198754 !important;
+            background: rgba(25,135,84,.1) !important;
+        }
+        .sa-act--publish {
+            border-color: #198754;
+            color: #198754;
+            background: rgba(25,135,84,.06);
+        }
+        .sa-act--publish:hover { filter: brightness(0.97); background: rgba(25,135,84,.14); }
+
         .sa-act--edit { border-color: #0d6efd; color: #0d6efd; }
         .sa-act--edit:hover { background: rgba(13,110,253,.08); color: #0d6efd; }
         .sa-act--chart { border-color: #0dcaf0; color: #0aa2c0; }
@@ -387,7 +425,7 @@
         }
         .sa-act--trash { border-color: #dc3545; color: #dc3545; cursor: pointer; }
         .sa-act--trash:hover { background: rgba(220,53,69,.08); color: #dc3545; }
-        .sa-toolbar-extra { font-size: .75rem; white-space: normal; max-width: 258px; }
+        .sa-toolbar-extra { font-size: .75rem; white-space: normal; }
     </style>
 }
 
@@ -399,15 +437,27 @@
             e.preventDefault();
             var url = btn.getAttribute('data-url');
             if (!url) return;
+
             navigator.clipboard.writeText(url).then(function () {
-                var prev = btn.getAttribute('title') || '';
-                btn.setAttribute('data-prev-title', prev);
-                btn.title = 'Panoya kopyalandı';
+                // İkonu değiştir
+                var icon = btn.querySelector('.sa-copy-icon');
+                if (icon) {
+                    icon.classList.remove('bi-link-45deg');
+                    icon.classList.add('bi-check-lg');
+                }
+                // "Kopyalandı" yazısını göster ve sınıf ekle
                 btn.classList.add('sa-act--copied');
+                btn.title = 'Panoya kopyalandı!';
+
                 setTimeout(function () {
-                    btn.title = btn.getAttribute('data-prev-title') || prev;
+                    // Geri al
+                    if (icon) {
+                        icon.classList.remove('bi-check-lg');
+                        icon.classList.add('bi-link-45deg');
+                    }
                     btn.classList.remove('sa-act--copied');
-                }, 1600);
+                    btn.title = btn.getAttribute('data-orig-title') || 'Doldurma adresini kopyala';
+                }, 2000);
             }).catch(function () {
                 btn.title = 'Kopyalanamadı — adresi elle seçin';
             });

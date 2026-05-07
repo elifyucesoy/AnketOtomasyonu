@@ -27,6 +27,16 @@ namespace AnketOtomasyonu.Services.Implementations
                 .FirstOrDefaultAsync(s => s.Id == surveyId);
         }
 
+        public async Task<Survey?> GetSurveyForEditAsync(int surveyId)
+        {
+            return await _context.Surveys
+                .AsNoTracking()
+                .Include(s => s.Questions.OrderBy(q => q.OrderIndex))
+                    .ThenInclude(q => q.Options.OrderBy(o => o.OrderIndex))
+                .Include(s => s.TargetUnits)
+                .FirstOrDefaultAsync(s => s.Id == surveyId);
+        }
+
         public async Task<IEnumerable<Survey>> GetAllSurveysAsync()
         {
             return await _context.Surveys
@@ -63,6 +73,28 @@ namespace AnketOtomasyonu.Services.Implementations
                             && (s.EndDate == null || s.EndDate >= now)))
                 .OrderByDescending(s => s.CreatedAt)
                 .ToListAsync();
+        }
+
+        public async Task<Dictionary<int, List<string>>> GetTargetUnitNamesBySurveyIdsAsync(IReadOnlyList<int> surveyIds)
+        {
+            if (surveyIds == null || surveyIds.Count == 0)
+                return new Dictionary<int, List<string>>();
+
+            var rows = await _context.SurveyBirimler.AsNoTracking()
+                .Where(sb => surveyIds.Contains(sb.SurveyId))
+                .Select(sb => new { sb.SurveyId, sb.Birim })
+                .ToListAsync();
+
+            return rows
+                .GroupBy(r => r.SurveyId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => x.Birim)
+                        .Where(b => !string.IsNullOrWhiteSpace(b))
+                        .Select(b => b.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(b => b, StringComparer.OrdinalIgnoreCase)
+                        .ToList());
         }
 
         private static IQueryable<SurveySummaryDto> SurveySummariesQuery(IQueryable<Survey> source)
@@ -274,20 +306,22 @@ namespace AnketOtomasyonu.Services.Implementations
 
             if (survey == null) return;
 
-            // Temel bilgileri güncelle
-            survey.Title = dto.Title;
-            survey.Description = dto.Description;
+            // Temel bilgileri güncelle (DB sütunları null kabul etmediğinden CreateSurvey ile aynı normalizasyon)
+            survey.Title = dto.Title?.Trim() ?? string.Empty;
+            survey.Description = dto.Description?.Trim() ?? string.Empty;
             survey.IsAnonymous = dto.IsAnonymous;
             survey.StartDate = dto.StartDate;
             survey.EndDate = dto.EndDate;
-            survey.TargetRoles = string.Join(",", dto.TargetRoles);
+            survey.TargetRoles = dto.TargetRoles != null && dto.TargetRoles.Any()
+                ? string.Join(",", dto.TargetRoles)
+                : string.Empty;
             survey.TargetFaculties = dto.TargetFaculties != null && dto.TargetFaculties.Any()
                 ? string.Join(",", dto.TargetFaculties)
                 : null;
             survey.TargetDepartments = dto.TargetDepartments != null && dto.TargetDepartments.Any()
                 ? string.Join(",", dto.TargetDepartments)
                 : null;
-            survey.CreatedByBirim = dto.CreatedByBirim;
+            survey.CreatedByBirim = dto.CreatedByBirim ?? survey.CreatedByBirim ?? string.Empty;
             if (dto.UnitId.HasValue) survey.UnitId = dto.UnitId;
             if (dto.UnitName != null) survey.UnitName = dto.UnitName;
             survey.UpdatedAt = DateTime.UtcNow;

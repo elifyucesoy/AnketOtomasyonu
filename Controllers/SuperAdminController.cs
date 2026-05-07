@@ -44,6 +44,32 @@ namespace AnketOtomasyonu.Controllers
             _unitApiService = unitApiService;
         }
 
+        /// <summary>Anket oluşturma formu ile aynı kaynak: CachedUnits → API → appsettings Birimler.</summary>
+        private async Task<List<string>> GetSurveyFormUnitNamesAsync()
+        {
+            var names = await _db.CachedUnits
+                .AsNoTracking()
+                .Where(u => u.IsActive && !string.IsNullOrEmpty(u.Name))
+                .OrderBy(u => u.Name)
+                .Select(u => u.Name)
+                .ToListAsync();
+
+            if (names.Count > 0)
+                return names;
+
+            var apiUnits = await _unitApiService.GetAllUnitsAsync();
+            names = apiUnits
+                .Where(u => u.IsActive && !string.IsNullOrWhiteSpace(u.Name))
+                .Select(u => u.Name.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (names.Count > 0)
+                return names;
+
+            return _birimService.GetAllNames();
+        }
+
         // ─── BİRİM DURUM TANILAMA ──────────────────────────────────────────────
         [HttpGet]
         public async Task<IActionResult> UnitDiag()
@@ -127,7 +153,7 @@ namespace AnketOtomasyonu.Controllers
         {
             var allSurveys = await _surveyService.GetAllSurveySummariesAsync();
 
-            var allBirimler = _birimService.GetAllNames();
+            var allBirimler = await GetSurveyFormUnitNamesAsync();
 
             // Birim filtresi
             var turkish = new CultureInfo("tr-TR");
@@ -186,7 +212,7 @@ namespace AnketOtomasyonu.Controllers
         {
             var allSurveys = await _surveyService.GetAllSurveySummariesAsync();
 
-            var allBirimler = _birimService.GetAllNames();
+            var allBirimler = await GetSurveyFormUnitNamesAsync();
 
             var pending = allSurveys
                 .Where(s => s.ApprovalStatus == ApprovalStatus.Pending)
@@ -255,7 +281,7 @@ namespace AnketOtomasyonu.Controllers
         public async Task<IActionResult> AllResults(string? birim = null, string? startDate = null, string? endDate = null, string dateSort = "newest")
         {
             var allSurveys = await _surveyService.GetAllSurveySummariesAsync();
-            var allBirimler = _birimService.GetAllNames();
+            var allBirimler = await GetSurveyFormUnitNamesAsync();
 
             var turkish = new CultureInfo("tr-TR");
             var sortOldestFirst = string.Equals(dateSort, "oldest", StringComparison.OrdinalIgnoreCase);
@@ -319,7 +345,7 @@ namespace AnketOtomasyonu.Controllers
                 .ThenBy(a => a.Username)
                 .ToListAsync();
 
-            var allBirimler = _birimService.GetAllNames();
+            var allBirimler = await GetSurveyFormUnitNamesAsync();
 
             if (!string.IsNullOrEmpty(filterBirim))
                 admins = admins.Where(a => a.PersonelBirim == filterBirim).ToList();
@@ -374,15 +400,18 @@ namespace AnketOtomasyonu.Controllers
             }
 
             username = username.Trim().ToLower();
-            personelBirim = personelBirim.Trim().ToUpper();
-
-            // Birim listesinde var mı kontrol et
-            var birimId = _birimService.GetIdByName(personelBirim);
-            if (birimId == null)
+            var birimRaw = personelBirim.Trim();
+            var turkish = new CultureInfo("tr-TR");
+            var catalogNames = await GetSurveyFormUnitNamesAsync();
+            bool birimOk = _birimService.GetIdByName(birimRaw) != null
+                || catalogNames.Any(b => turkish.CompareInfo.Compare(b, birimRaw, CompareOptions.IgnoreCase) == 0);
+            if (!birimOk)
             {
-                TempData["Error"] = $"'{personelBirim}' geçerli bir birim adı değil. Lütfen listeden seçiniz.";
+                TempData["Error"] = $"'{birimRaw}' geçerli bir birim adı değil. Lütfen listeden seçiniz.";
                 return RedirectToAction("AdminManagement");
             }
+
+            personelBirim = birimRaw.ToUpper(turkish);
 
             bool exists = await _db.AdminPermissions
                 .AnyAsync(p => p.Username.ToLower() == username && p.PersonelBirim.ToUpper() == personelBirim);

@@ -33,7 +33,9 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> PublicSurveys()
         {
-            var surveys = await _surveyService.GetActiveAnonymousSurveySummariesAsync();
+            var surveys = (await _surveyService.GetActiveAnonymousSurveySummariesAsync()).ToList();
+            var targetUnitMap = await _surveyService.GetTargetUnitNamesBySurveyIdsAsync(
+                surveys.Select(s => s.Id).ToList());
 
             var vm = new SurveyIndexViewModel
             {
@@ -50,9 +52,11 @@ namespace AnketOtomasyonu.Controllers
                     QuestionCount = s.QuestionCount,
                     ResponseCount = s.ResponseCount,
                     CreatedByName = s.CreatedByName,
+                    CreatedByBirim = s.CreatedByBirim ?? string.Empty,
                     CreatedAt = s.CreatedAt,
                     IsAnonymous = true,
-                    TargetRoles = s.TargetRoles
+                    TargetRoles = s.TargetRoles,
+                    TargetUnits = SurveyTargetUnitsHelper.Resolve(s, targetUnitMap)
                 }).ToList()
             };
 

@@ -7,6 +7,9 @@ namespace AnketOtomasyonu.Services.Interfaces
     {
         Task<Survey?> GetSurveyWithQuestionsAsync(int surveyId);
 
+        /// <summary>Düzenleme / önizleme için — sorular + hedef birimler; yanıt kayıtları yüklenmez (hafif).</summary>
+        Task<Survey?> GetSurveyForEditAsync(int surveyId);
+
         /// <summary>Tüm anketler + tüm yanıtlar (ağır). Yalnızca gerçekten tam graf gerektiğinde kullanın.</summary>
         Task<IEnumerable<Survey>> GetAllSurveysAsync();
 
@@ -20,6 +23,9 @@ namespace AnketOtomasyonu.Services.Interfaces
         Task<IReadOnlyList<SurveySummaryDto>> GetActiveAnonymousSurveySummariesAsync();
 
         Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(string creatorUserId);
+
+        /// <summary>Anket kartlarında hedef birim etiketleri için SurveyBirim satırları (toplu).</summary>
+        Task<Dictionary<int, List<string>>> GetTargetUnitNamesBySurveyIdsAsync(IReadOnlyList<int> surveyIds);
 
         /// <summary>Admin anket listesi için — hafif.</summary>
         Task<IReadOnlyList<SurveySummaryDto>> GetSurveySummariesByCreatorAsync(string creatorUserId);

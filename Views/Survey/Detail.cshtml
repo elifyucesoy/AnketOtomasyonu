@@ -15,9 +15,18 @@
         }
         <small class="text-muted">@Model.CreatedByName | @Model.CreatedAt.ToString("dd.MM.yyyy")</small>
     </div>
-    <a asp-controller="Admin" asp-action="Dashboard" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Geri
-    </a>
+    @if (User.HasSuperAdminAccess())
+    {
+        <a asp-controller="SuperAdmin" asp-action="Dashboard" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </a>
+    }
+    else
+    {
+        <a asp-controller="Admin" asp-action="Dashboard" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </a>
+    }
 </div>
 
 <div class="row g-3 mb-4">
