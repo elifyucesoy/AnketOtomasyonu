@@ -169,7 +169,7 @@
                             <th>Soru</th>
                             <th>Yanıt</th>
                             <th>Tarih</th>
-                            <th class="text-end">İşlem</th>
+                            <th class="sa-col-actions text-end">İşlem</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -188,49 +188,63 @@
                                 <td>@s.QuestionCount</td>
                                 <td>@s.ResponseCount</td>
                                 <td class="text-muted small">@s.CreatedAt.ToString("dd.MM.yyyy")</td>
-                                <td class="text-end">
-                                    <div class="d-flex gap-1 justify-content-end">
+                                <td class="sa-actions-cell">
+                                    @{
+                                        var fillPath = Url.Action("Fill", "SurveyResponse", new { id = s.Id })!;
+                                        var fillAbs = $"{Context.Request.Scheme}://{Context.Request.Host}{fillPath}";
+                                    }
+                                    <div class="sa-toolbar" role="group" aria-label="Anket işlemleri">
                                         <a asp-action="PreviewSurvey" asp-route-id="@s.Id"
-                                           class="btn btn-sm btn-outline-primary" title="Anketi Önizle">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        @if (s.ResponseCount > 0)
-                                        {
-                                            <a asp-action="Results" asp-route-id="@s.Id"
-                                               class="btn btn-sm btn-outline-info" title="Sonuçları Gör">
-                                                <i class="bi bi-bar-chart"></i>
-                                            </a>
-                                        }
-                                        @if (s.ApprovalStatus == ApprovalStatus.Pending)
-                                        {
-                                            <a asp-action="SurveyApprovals"
-                                               class="btn btn-sm btn-warning" title="Onayla / Reddet">
-                                                <i class="bi bi-clipboard-check"></i>
-                                            </a>
-                                        }
-                                        @if (s.Status == "Taslak" && s.ApprovalStatus == ApprovalStatus.Approved)
-                                        {
-                                            <form asp-controller="Admin" asp-action="Publish"
-                                                  asp-route-id="@s.Id" method="post" style="display:inline;">
-                                                @Html.AntiForgeryToken()
-                                                <button type="submit" class="btn btn-sm btn-success" title="Yayınla"
-                                                        onclick="return confirm('Anket yayınlansın mı?')">
-                                                    <i class="bi bi-broadcast"></i>
-                                                </button>
-                                            </form>
-                                        }
+                                           class="sa-act sa-act--eye" title="Önizle"><i class="bi bi-eye"></i></a>
+                                        <button type="button"
+                                                class="sa-act sa-act--link js-copy-survey-url"
+                                                data-url="@fillAbs"
+                                                title="@(s.IsAnonymous ? "Doldurma adresini kopyala (anonim)" : "Doldurma adresini kopyala — anonim değil, giriş gerekir")">
+                                            <i class="bi bi-link-45deg" aria-hidden="true"></i>
+                                        </button>
+                                        <a asp-controller="Admin" asp-action="EditSurvey" asp-route-id="@s.Id"
+                                           class="sa-act sa-act--edit" title="Düzenle"><i class="bi bi-pencil"></i></a>
+                                        <a asp-action="Results" asp-route-id="@s.Id"
+                                           class="sa-act sa-act--chart" title="Sonuçlar"><i class="bi bi-bar-chart"></i></a>
                                         @if (s.Status == "Aktif")
                                         {
-                                            <form asp-controller="Admin" asp-action="Close"
-                                                  asp-route-id="@s.Id" method="post" style="display:inline;">
+                                            <form asp-controller="Admin" asp-action="Close" asp-route-id="@s.Id"
+                                                  method="post" class="sa-act-form">
                                                 @Html.AntiForgeryToken()
-                                                <button type="submit" class="btn btn-sm btn-warning" title="Kapat"
-                                                        onclick="return confirm('Anket kapatılsın mı?')">
+                                                <button type="submit" class="sa-act sa-act--stop" title="Kapat"
+                                                        onclick="return confirm('Anket kapatılsın mı?');">
                                                     <i class="bi bi-stop-circle"></i>
                                                 </button>
                                             </form>
                                         }
+                                        else
+                                        {
+                                            <span class="sa-act sa-act--stop-off" title="Yalnızca aktif ankette kullanılır"><i class="bi bi-stop-circle"></i></span>
+                                        }
+                                        <form asp-controller="Admin" asp-action="Delete" asp-route-id="@s.Id"
+                                              method="post" class="sa-act-form"
+                                              onsubmit="return confirm('Bu anket kalıcı olarak silinsin mi?');">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="sa-act sa-act--trash" title="Sil"><i class="bi bi-trash"></i></button>
+                                        </form>
                                     </div>
+                                    @if (s.ApprovalStatus == ApprovalStatus.Pending || (s.Status == "Taslak" && s.ApprovalStatus == ApprovalStatus.Approved))
+                                    {
+                                        <div class="sa-toolbar-extra mt-1">
+                                            @if (s.ApprovalStatus == ApprovalStatus.Pending)
+                                            {
+                                                <a asp-action="SurveyApprovals" class="badge text-bg-warning text-decoration-none">Onay</a>
+                                            }
+                                            @if (s.Status == "Taslak" && s.ApprovalStatus == ApprovalStatus.Approved)
+                                            {
+                                                <form asp-controller="Admin" asp-action="Publish" asp-route-id="@s.Id" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="badge border-0 text-bg-success"
+                                                            onclick="return confirm('Anket yayınlansın mı?');">Yayınla</button>
+                                                </form>
+                                            }
+                                        </div>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -305,5 +319,98 @@
             box-shadow: 0 6px 18px rgba(0,0,0,.12) !important;
         }
         .stat-card.border-sa { border: 2px solid #7c3aed !important; }
+
+        /* İşlem sütunu: sabit genişlik + taşma yok; 6 kare yan yana */
+        .sa-col-actions,
+        .sa-actions-cell {
+            width: 1%;
+            min-width: 258px;
+            max-width: 258px;
+            vertical-align: middle;
+            white-space: nowrap;
+            padding-left: .5rem !important;
+            padding-right: .5rem !important;
+        }
+        .sa-toolbar {
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+        .sa-act-form { display: inline-flex; margin: 0; padding: 0; flex-shrink: 0; }
+        .sa-act {
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 9px;
+            border: 2px solid transparent;
+            background: #fff;
+            text-decoration: none !important;
+            font-size: 1rem;
+            line-height: 1;
+            transition: background .15s, filter .15s, opacity .15s;
+        }
+        button.sa-act {
+            appearance: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .sa-act--eye { border-color: #0d6efd; color: #0d6efd; }
+        .sa-act--eye:hover { background: rgba(13,110,253,.08); color: #0d6efd; }
+        .sa-act--link { border-color: #adb5bd; color: #6c757d; }
+        .sa-act--link:hover { background: #f8f9fa; color: #495057; }
+        .sa-act--copied { border-color: #198754 !important; color: #198754 !important; background: rgba(25,135,84,.1) !important; }
+        .sa-act--edit { border-color: #0d6efd; color: #0d6efd; }
+        .sa-act--edit:hover { background: rgba(13,110,253,.08); color: #0d6efd; }
+        .sa-act--chart { border-color: #0dcaf0; color: #0aa2c0; }
+        .sa-act--chart:hover { background: rgba(13,202,240,.12); color: #087990; }
+        .sa-act--stop {
+            border: none !important;
+            background: #ffc107 !important;
+            color: #212529 !important;
+            cursor: pointer;
+        }
+        .sa-act--stop:hover { filter: brightness(0.96); }
+        .sa-act--stop-off {
+            border: 2px dashed #dee2e6 !important;
+            background: #f1f3f5 !important;
+            color: #adb5bd !important;
+            cursor: default;
+            pointer-events: none;
+        }
+        .sa-act--trash { border-color: #dc3545; color: #dc3545; cursor: pointer; }
+        .sa-act--trash:hover { background: rgba(220,53,69,.08); color: #dc3545; }
+        .sa-toolbar-extra { font-size: .75rem; white-space: normal; max-width: 258px; }
     </style>
+}
+
+@section Scripts {
+    <script>
+        document.body.addEventListener('click', function (e) {
+            var btn = e.target.closest('.js-copy-survey-url');
+            if (!btn) return;
+            e.preventDefault();
+            var url = btn.getAttribute('data-url');
+            if (!url) return;
+            navigator.clipboard.writeText(url).then(function () {
+                var prev = btn.getAttribute('title') || '';
+                btn.setAttribute('data-prev-title', prev);
+                btn.title = 'Panoya kopyalandı';
+                btn.classList.add('sa-act--copied');
+                setTimeout(function () {
+                    btn.title = btn.getAttribute('data-prev-title') || prev;
+                    btn.classList.remove('sa-act--copied');
+                }, 1600);
+            }).catch(function () {
+                btn.title = 'Kopyalanamadı — adresi elle seçin';
+            });
+        });
+    </script>
 }

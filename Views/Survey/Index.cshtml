@@ -1,6 +1,7 @@
 ﻿@using AnketOtomasyonu.Models.ViewModels
 @using AnketOtomasyonu.Models.Entities
-@model IEnumerable<Survey>
+@using AnketOtomasyonu.Models.DTOs
+@model IEnumerable<SurveySummaryDto>
 @{
     ViewData["Title"] = "Anketlerim";
 }
@@ -28,7 +29,7 @@
                             <span class="badge bg-dark"><i class="bi bi-shield-check"></i> Anonim</span>
                         }
                         <h5 class="mt-2 fw-bold">@s.Title</h5>
-                        <small class="text-muted">@(s.Questions?.Count ?? 0) soru | @(s.Responses?.Count ?? 0) yanıt</small>
+                        <small class="text-muted">@s.QuestionCount soru | @s.ResponseCount yanıt</small>
                     </div>
                     <div class="card-footer bg-white border-0">
                         <a asp-action="Detail" asp-route-id="@s.Id" class="btn btn-sm btn-outline-primary">

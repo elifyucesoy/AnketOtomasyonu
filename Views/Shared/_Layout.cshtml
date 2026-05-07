@@ -97,6 +97,9 @@
                     var _navRole     = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
                     var _navLoggedIn = User.Identity?.IsAuthenticated ?? false;
                     var _navName     = User.Identity?.Name ?? "";
+                    var _navSuper    = User.HasAnketPermission(AnketPermissions.SuperAdmin) || _navRole == "SuperAdmin";
+                    var _navAdmin    = (User.HasAnketPermission(AnketPermissions.Admin) || _navRole == "Admin") && !_navSuper;
+                    var _navAkademik = User.HasAnketPermission(AnketPermissions.Akademik) || _navRole == "Akademik";
                 }
                 <div class="collapse navbar-collapse" id="navbarMain">
                     <ul class="navbar-nav me-auto">
@@ -116,7 +119,7 @@
                             </li>
                         }
 
-                        @if (_navRole == "Admin")
+                        @if (_navAdmin)
                         {
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="Admin" asp-action="Dashboard">
@@ -125,7 +128,7 @@
                             </li>
                         }
 
-                        @if (_navRole == "SuperAdmin")
+                        @if (_navSuper)
                         {
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="SuperAdmin" asp-action="Dashboard">
@@ -144,7 +147,7 @@
                             </li>
                         }
 
-                        @if (_navRole == "Akademik")
+                        @if (_navAkademik)
                         {
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="Akademik" asp-action="Dashboard">

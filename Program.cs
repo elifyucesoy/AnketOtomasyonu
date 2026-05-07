@@ -114,11 +114,54 @@ builder.Services.AddScoped<ISurveyResponseService, SurveyResponseService>();
 builder.Services.AddSingleton<IBirimService, BirimService>();     // appsettings fallback
 builder.Services.AddSingleton<IBolumService, BolumService>();
 builder.Services.AddScoped<IKaliteApiService, KaliteApiService>(); // Kalite API (fakülte + bölüm)
-builder.Services.AddScoped<IUnitApiService, UnitApiService>();     // apiservices Unit + UnitType (30 gün cache)
-builder.Services.AddHostedService<AnketOtomasyonu.Services.SurveyExpirationWorker>(); // Süresi dolan anketleri pasife al
-builder.Services.AddHostedService<AnketOtomasyonu.Services.UnitSyncBackgroundService>(); // Aylık birim sync
+builder.Services.AddScoped<IUnitApiService, UnitApiService>();     // apiservices Unit + UnitType (7 gün cache)
+
+// System User — apiservices.selcuk.edu.tr auth (HasPermission vb.)
+builder.Services.AddSingleton<IApiServicesAuthService, ApiServicesAuthService>();
+// Eski UnitCatalogService kayıtlı kaldı; birim senkronu tek kaynak: UnitSyncBackgroundService + CachedUnits + UnitApiService DB önceliği
+builder.Services.AddSingleton<IUnitCatalogService, UnitCatalogService>();
+
+// BACKGROUND JOBS
+builder.Services.AddHostedService<AnketOtomasyonu.Services.SurveyExpirationWorker>();         // Süresi dolan anketleri pasife al
+builder.Services.AddHostedService<AnketOtomasyonu.Services.UnitSyncBackgroundService>();       // Haftalık System User → UnitList → CachedUnits (+ bellek önbelleği)
 
 var app = builder.Build();
+
+// Startup: CachedUnits ve Survey sütunlarını güvenli SQL ile oluştur/kontrol et
+using (var startupScope = app.Services.CreateScope())
+{
+    var db = startupScope.ServiceProvider.GetRequiredService<AnketOtomasyonu.Data.ApplicationDbContext>();
+    var logger = startupScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        // CachedUnits tablosu
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'CachedUnits')
+            CREATE TABLE CachedUnits (
+                Id           INT           NOT NULL,
+                Name         NVARCHAR(300) NOT NULL,
+                ParentId     INT           NULL,
+                UnitTypeId   INT           NULL,
+                UnitTypeName NVARCHAR(200) NULL,
+                IsActive     BIT           NOT NULL DEFAULT 1,
+                LastSyncedAt DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+                CONSTRAINT PK_CachedUnits PRIMARY KEY (Id)
+            )");
+
+        // Survey tablosuna UnitId / UnitName sütunları
+        db.Database.ExecuteSqlRaw(@"
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='Surveys' AND COLUMN_NAME='UnitId')
+                ALTER TABLE Surveys ADD UnitId INT NULL;
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='Surveys' AND COLUMN_NAME='UnitName')
+                ALTER TABLE Surveys ADD UnitName NVARCHAR(300) NULL;");
+
+        logger.LogInformation("[Startup] DB şeması hazır.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "[Startup] DB hazırlık hatası — uygulama çalışmaya devam ediyor.");
+    }
+}
 
 if (!app.Environment.IsDevelopment())
 {

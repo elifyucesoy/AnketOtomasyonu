@@ -30,6 +30,9 @@ namespace AnketOtomasyonu.Models.DTOs
         [JsonPropertyName("code")]
         public string? Code { get; set; }
 
+        [JsonPropertyName("parentId")]
+        public int? ParentId { get; set; }
+
         [JsonPropertyName("unitTypeId")]
         public int? UnitTypeId { get; set; }
 

@@ -2,7 +2,7 @@ using AnketOtomasyonu.Services.Interfaces;
 
 namespace AnketOtomasyonu.Services
 {
-    /// <summary>Ayda bir UnitList + UnitTypeList önbelleğini sistem hesabıyla yeniler.</summary>
+    /// <summary>Haftada bir UnitList + UnitTypeList önbelleğini sistem hesabıyla yeniler.</summary>
     public sealed class UnitCatalogSyncHostedService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
@@ -35,7 +35,7 @@ namespace AnketOtomasyonu.Services
 
                 try
                 {
-                    await Task.Delay(TimeSpan.FromDays(30), stoppingToken);
+                    await Task.Delay(TimeSpan.FromDays(7), stoppingToken);  // Haftalık sync
                 }
                 catch (OperationCanceledException)
                 {

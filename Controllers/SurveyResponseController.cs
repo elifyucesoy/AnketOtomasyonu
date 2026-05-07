@@ -1,3 +1,5 @@
+using AnketOtomasyonu.Authorization;
+using AnketOtomasyonu.Helpers;
 using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
@@ -15,20 +17,23 @@ namespace AnketOtomasyonu.Controllers
     {
         private readonly ISurveyService _surveyService;
         private readonly ISurveyResponseService _responseService;
+        private readonly IUnitApiService _unitApiService;
 
         public SurveyResponseController(
             ISurveyService surveyService,
-            ISurveyResponseService responseService)
+            ISurveyResponseService responseService,
+            IUnitApiService unitApiService)
         {
             _surveyService = surveyService;
             _responseService = responseService;
+            _unitApiService = unitApiService;
         }
 
         // GET /SurveyResponse/PublicSurveys
         [HttpGet]
         public async Task<IActionResult> PublicSurveys()
         {
-            var surveys = await _surveyService.GetActiveAnonymousSurveysAsync();
+            var surveys = await _surveyService.GetActiveAnonymousSurveySummariesAsync();
 
             var vm = new SurveyIndexViewModel
             {
@@ -42,8 +47,8 @@ namespace AnketOtomasyonu.Controllers
                     Description = s.Description,
                     Status = "Aktif",
                     StatusBadgeClass = "bg-success",
-                    QuestionCount = s.Questions.Count,
-                    ResponseCount = s.Responses.Count,
+                    QuestionCount = s.QuestionCount,
+                    ResponseCount = s.ResponseCount,
                     CreatedByName = s.CreatedByName,
                     CreatedAt = s.CreatedAt,
                     IsAnonymous = true,
@@ -65,7 +70,7 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction("NotFound_", "SurveyResponse");
             }
 
-            if (survey.Status != SurveyStatus.Active && !User.IsInRole("SuperAdmin"))
+            if (survey.Status != SurveyStatus.Active && !User.HasSuperAdminAccess())
             {
                 TempData["Error"] = "Bu anket aktif değil.";
                 if (survey.IsAnonymous)
@@ -93,19 +98,13 @@ namespace AnketOtomasyonu.Controllers
                     return RedirectToAction("Login", "Auth", new { returnUrl });
                 }
 
-                if (User.IsInRole("Akademik"))
-                {
-                    TempData["Error"] = "Akademik personel anket dolduramaz, sadece sonuçları görüntüleyebilir.";
-                    return RedirectToAction("NotFound_", "SurveyResponse");
-                }
-
                 // ── KULLANICI TİPİ KONTROLÜ ──
-                var userType = User.FindFirstValue("UserTypeId") == "0" ? "Employee" : "Student";
+                var userType = AnketSurveyRoleResolver.ResolveSurveyUserRoleType(User);
                 if (!string.IsNullOrEmpty(survey.TargetRoles) && !string.IsNullOrEmpty(userType))
                 {
                     var allowedTypes = survey.TargetRoles
                         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (!allowedTypes.Contains(userType, StringComparer.OrdinalIgnoreCase))
+                    if (!TargetRoleMatchesUser(allowedTypes, User, userType))
                     {
                         TempData["Error"] = "Bu anket sizin kullanıcı tipinize açık değildir.";
                         return RedirectToAction("NotFound_", "SurveyResponse");
@@ -113,33 +112,16 @@ namespace AnketOtomasyonu.Controllers
                 }
 
                 // ── YENİ HEDEFLEME KONTROLLERİ (Fakülte/Birim ve Bölüm) ──
-                
-                // 1. Hedef Fakülteler/Birimler Kontrolü
-                var userBirim = (userType == "Employee") 
-                    ? User.FindFirstValue("PersonelBirim") 
-                    : User.FindFirstValue("FakulteAdi");
 
+                // 1. Hedef Fakülteler/Birimler — önce UnitId zinciri; başarısızsa metin eşlemesi (öğrenci/personel/akademik/admin/superadmin, çoklu izin fark etmez)
                 bool birimMatch = false;
-
-                // Creator match? (MERKEZ ise herkese açık, değilse sadece oluşturan birime)
-                if (string.Equals(survey.CreatedByBirim, "MERKEZ", StringComparison.CurrentCultureIgnoreCase))
-                {
+                if (survey.UnitId.HasValue && survey.UnitId.Value > 0)
+                    birimMatch = await CheckUnitIdAccessAsync(survey.UnitId.Value);
+                if (!birimMatch)
+                    birimMatch = TryMatchSurveyBirimByStrings(survey);
+                // ANKET_API_SUPER_ADMIN: çoklu rol + boş birim profili sık; hedef rol uygunsa birim filtresini aş
+                if (!birimMatch && User.HasSuperAdminAccess())
                     birimMatch = true;
-                }
-                else if (!string.IsNullOrEmpty(userBirim) && string.Equals(survey.CreatedByBirim, userBirim, StringComparison.CurrentCultureIgnoreCase))
-                {
-                    birimMatch = true;
-                }
-
-                // Explicit target match?
-                if (!birimMatch && !string.IsNullOrEmpty(survey.TargetFaculties))
-                {
-                    var targets = survey.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (!string.IsNullOrEmpty(userBirim) && targets.Any(t => string.Equals(t, userBirim, StringComparison.CurrentCultureIgnoreCase)))
-                    {
-                        birimMatch = true;
-                    }
-                }
 
                 if (!birimMatch)
                 {
@@ -151,13 +133,14 @@ namespace AnketOtomasyonu.Controllers
                 if (!string.IsNullOrEmpty(survey.TargetDepartments))
                 {
                     var targets = survey.TargetDepartments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    var userBolum = (userType == "Employee")
-                        ? User.FindFirstValue("JobTitle") 
-                        : User.FindFirstValue("BolumAdi");
+                    var userBolum = userType == "Student"
+                        ? User.FindFirstValue("BolumAdi")
+                        : User.FindFirstValue("JobTitle");
 
                     if (userType == "Student") // Bölüm kontrolü genelde öğrenciler için kritik
                     {
-                        if (string.IsNullOrEmpty(userBolum) || !targets.Any(t => string.Equals(t, userBolum, StringComparison.CurrentCultureIgnoreCase)))
+                        var normalizedBolum = SurveyUnitMatchHelper.NormalizeBirim(userBolum);
+                        if (string.IsNullOrEmpty(normalizedBolum) || !targets.Any(t => SurveyUnitMatchHelper.NormalizeBirim(t) == normalizedBolum))
                         {
                             TempData["Error"] = "Bu anket okuduğunuz bölüme açık değildir.";
                             return RedirectToAction("NotFound_", "SurveyResponse");
@@ -231,18 +214,12 @@ namespace AnketOtomasyonu.Controllers
 
                 userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
-                if (User.IsInRole("Akademik"))
-                {
-                    TempData["Error"] = "Akademik personel anket dolduramaz, sadece sonuçları görüntüleyebilir.";
-                    return RedirectToAction("NotFound_", "SurveyResponse");
-                }
-
-                var userType = User.FindFirstValue("UserTypeId") == "0" ? "Employee" : "Student";
+                var userType = AnketSurveyRoleResolver.ResolveSurveyUserRoleType(User);
                 if (!string.IsNullOrEmpty(survey.TargetRoles) && !string.IsNullOrEmpty(userType))
                 {
                     var allowedTypes = survey.TargetRoles
                         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    if (!allowedTypes.Contains(userType, StringComparer.OrdinalIgnoreCase))
+                    if (!TargetRoleMatchesUser(allowedTypes, User, userType))
                     {
                         TempData["Error"] = "Bu anket sizin kullanıcı tipinize açık değildir.";
                         return RedirectToAction("NotFound_", "SurveyResponse");
@@ -250,34 +227,15 @@ namespace AnketOtomasyonu.Controllers
                 }
 
                 // ── YENİ HEDEFLEME KONTROLLERİ (Fakülte/Birim ve Bölüm) ──
-                
-                // 1. Hedef Fakülteler/Birimler Kontrolü
-                var userBirim = (userType == "Employee") 
-                    ? User.FindFirstValue("PersonelBirim") 
-                    : User.FindFirstValue("FakulteAdi");
 
+                // 1. Hedef Fakülteler/Birimler — önce UnitId; olmazsa metin yedeği (tüm izin kombinasyonları için Fill ile aynı)
                 bool birimMatch = false;
-
-                // Creator match? (MERKEZ ise herkese açık, değilse sadece oluşturan birime)
-                if (NormalizeBirim(survey.CreatedByBirim) == "MERKEZ")
-                {
+                if (survey.UnitId.HasValue && survey.UnitId.Value > 0)
+                    birimMatch = await CheckUnitIdAccessAsync(survey.UnitId.Value);
+                if (!birimMatch)
+                    birimMatch = TryMatchSurveyBirimByStrings(survey);
+                if (!birimMatch && User.HasSuperAdminAccess())
                     birimMatch = true;
-                }
-                else if (NormalizeBirim(survey.CreatedByBirim) == NormalizeBirim(userBirim))
-                {
-                    birimMatch = true;
-                }
-
-                // Explicit target match?
-                if (!birimMatch && !string.IsNullOrEmpty(survey.TargetFaculties))
-                {
-                    var targets = survey.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    var normalizedUserBirim = NormalizeBirim(userBirim);
-                    if (targets.Any(t => NormalizeBirim(t) == normalizedUserBirim))
-                    {
-                        birimMatch = true;
-                    }
-                }
 
                 if (!birimMatch)
                 {
@@ -289,14 +247,14 @@ namespace AnketOtomasyonu.Controllers
                 if (!string.IsNullOrEmpty(survey.TargetDepartments))
                 {
                     var targets = survey.TargetDepartments.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    var userBolum = (userType == "Employee")
-                        ? User.FindFirstValue("JobTitle")
-                        : User.FindFirstValue("BolumAdi");
+                    var userBolum = userType == "Student"
+                        ? User.FindFirstValue("BolumAdi")
+                        : User.FindFirstValue("JobTitle");
 
                     if (userType == "Student")
                     {
-                        var normalizedUserBolum = NormalizeBirim(userBolum);
-                        if (string.IsNullOrEmpty(normalizedUserBolum) || !targets.Any(t => NormalizeBirim(t) == normalizedUserBolum))
+                        var normalizedUserBolum = SurveyUnitMatchHelper.NormalizeBirim(userBolum);
+                        if (string.IsNullOrEmpty(normalizedUserBolum) || !targets.Any(t => SurveyUnitMatchHelper.NormalizeBirim(t) == normalizedUserBolum))
                         {
                             TempData["Error"] = "Bu anket okuduğunuz bölüme açık değildir.";
                             return RedirectToAction("NotFound_", "SurveyResponse");
@@ -348,15 +306,112 @@ namespace AnketOtomasyonu.Controllers
         public IActionResult NotFound_() => View();
 
         // ── YARDIMCI METODLAR ──────────────────────────────
-        
+
         /// <summary>
-        /// Türkçe karakter desteğiyle birim adlarını normalleştirir (BÜYÜK HARF + trim).
-        /// "Sosyal Bilimler Meslek Yüksekokulu" == "SOSYAL BİLİMLER MESLEK YÜKSEKOKULU" olur.
+        /// UnitId tutmazsa: cookie’deki <b>tüm</b> birim anahtarları (çoklu UnitName, PersonelBirim, FakulteAdi, AuthorizedUnits).
+        /// Hangi beş ANKET_* izin kombinasyonu olursa olsun aynı merkezi eşleme — tek birime sıkıştırılmaz.
         /// </summary>
-        private static string NormalizeBirim(string? text)
+        private bool TryMatchSurveyBirimByStrings(Survey survey) =>
+            SurveyUnitMatchHelper.MatchesSurveyBirimStrings(User, survey.CreatedByBirim, survey.TargetFaculties);
+
+        /// <summary>
+        /// Hedef roller: önce <see cref="AnketSurveyRoleResolver.ResolveSurveyUserRoleType"/>, sonra cookie’deki
+        /// 5 ANKET_* izin kodundan herhangi biri; anket hedefiyle <b>en az biri</b> eşleşebilir (çoklu izin).
+        /// </summary>
+        private static bool TargetRoleMatchesUser(string[] allowedTypes, ClaimsPrincipal user, string userType)
         {
-            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-            return text.Trim().ToUpper(new System.Globalization.CultureInfo("tr-TR"));
+            if (allowedTypes.Contains(userType, StringComparer.OrdinalIgnoreCase))
+                return true;
+
+            if (string.Equals(userType, "Akademik", StringComparison.OrdinalIgnoreCase) &&
+                allowedTypes.Contains("Employee", StringComparer.OrdinalIgnoreCase))
+                return true;
+
+            if (string.Equals(userType, "Idari", StringComparison.OrdinalIgnoreCase))
+            {
+                if (allowedTypes.Contains("Idari", StringComparer.OrdinalIgnoreCase)) return true;
+                if (allowedTypes.Contains("Employee", StringComparer.OrdinalIgnoreCase)) return true;
+            }
+
+            // ── 5 izin kodu × anket hedef rolü (ANKET_API_* / ANKET_IDARI) ──
+            foreach (var target in allowedTypes)
+            {
+                foreach (var code in AnketPermissions.AllCodes)
+                {
+                    if (!user.HasClaim(AnketPermissions.ClaimType, code))
+                        continue;
+                    if (SurveyTargetMatchesPermissionCode(code, target))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Uzak sistemdeki izin kodu, anket oluştururken seçilen hedef rol satırıyla uyumlu mu?
+        /// </summary>
+        private static bool SurveyTargetMatchesPermissionCode(string permissionCode, string surveyTargetRaw)
+        {
+            var t = surveyTargetRaw.Trim();
+            if (string.IsNullOrEmpty(t)) return false;
+
+            bool Is(params string[] aliases) =>
+                aliases.Any(a => string.Equals(a, t, StringComparison.OrdinalIgnoreCase));
+
+            return permissionCode switch
+            {
+                AnketPermissions.SuperAdmin => true,
+                AnketPermissions.Admin =>
+                    Is("Employee", "Student", "Akademik", "Idari", "Admin", "SuperAdmin", "Personel"),
+                AnketPermissions.Akademik =>
+                    Is("Akademik", "Employee", "Personel"),
+                AnketPermissions.Idari =>
+                    Is("Idari", "Employee", "Personel"),
+                AnketPermissions.Student =>
+                    Is("Student", "Öğrenci"),
+                _ => false
+            };
+        }
+
+        /// <summary>
+        /// Kullanıcının UnitId claimlerini okur ve verilen surveyUnitId ile eşleşip
+        /// eşleşmediğini kontrol eder.
+        /// Eşleşme mantığı:
+        ///   1. Kullanıcının herhangi bir UnitId'si == surveyUnitId  (direkt eşleşme)
+        ///   2. Kullanıcının biriminin parentId'si == surveyUnitId  (alt birim → üst fakülte)
+        /// </summary>
+        private async Task<bool> CheckUnitIdAccessAsync(int surveyUnitId)
+        {
+            // Kullanıcının tüm UnitId claimlerini al (birden fazla olabilir)
+            var userUnitIds = User.FindAll("UnitId")
+                .Select(c => int.TryParse(c.Value, out var id) ? id : 0)
+                .Where(id => id > 0)
+                .ToHashSet();
+
+            if (!userUnitIds.Any()) return false;
+
+            // 1. Direkt eşleşme
+            if (userUnitIds.Contains(surveyUnitId)) return true;
+
+            // 2. ParentId zinciri: her kullanıcı birimi için üst birimi kontrol et
+            //    UnitList cache'den gelir (API çağrısı yapmaz)
+            foreach (var userUnitId in userUnitIds)
+            {
+                var parentUnit = await _unitApiService.GetParentUnitAsync(userUnitId);
+                if (parentUnit != null && parentUnit.Id == surveyUnitId)
+                    return true;
+
+                // İsteğe bağlı: bir kademe daha yukarı çık (bölüm → fakülte → üniversite)
+                if (parentUnit != null)
+                {
+                    var grandParent = await _unitApiService.GetParentUnitAsync(parentUnit.Id);
+                    if (grandParent != null && grandParent.Id == surveyUnitId)
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         // ── IP ALMA YARDIMCI METODU ──────────────────────

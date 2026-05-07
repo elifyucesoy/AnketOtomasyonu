@@ -1,3 +1,5 @@
+using AnketOtomasyonu.Authorization;
+using AnketOtomasyonu.Helpers;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -6,7 +8,7 @@ using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
 {
-    [Authorize(Roles = "Akademik")]
+    [Authorize(Policy = AnketPermissions.Akademik)]
     public class AkademikController : Controller
     {
         private readonly ISurveyService _surveyService;
@@ -19,21 +21,14 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> Dashboard()
         {
-            var personelBirim = User.FindFirstValue("PersonelBirim");
-
-            if (string.IsNullOrEmpty(personelBirim))
-            {
-                // Fallback, if token misses unit
-                return View(new List<Survey>());
-            }
-
-            // Fakültenin veya bölümün (kendi PersonelBirim) sadece "Onaylanmış/Yayınlanan" ve aktif anketlerini getir.
-            var surveys = (await _surveyService.GetSurveysByBirimAsync(personelBirim))
-                .Where(s => s.ApprovalStatus == ApprovalStatus.Approved && s.Status == SurveyStatus.Active)
+            // Onaylı + aktif; birim eşlemesi Home / SurveyResponse ile aynı (çoklu UnitName, PersonelBirim, …).
+            var surveys = (await _surveyService.GetActiveSurveysAsync())
+                .Where(s => s.ApprovalStatus == ApprovalStatus.Approved)
+                .Where(s => SurveyUnitMatchHelper.MatchesSurveyBirimStrings(User, s.CreatedByBirim, s.TargetFaculties))
                 .OrderByDescending(s => s.CreatedAt)
                 .ToList();
 
-            ViewBag.UserBirim = personelBirim;
+            ViewBag.UserBirim = User.FindFirstValue("PersonelBirim");
 
             return View(surveys);
         }

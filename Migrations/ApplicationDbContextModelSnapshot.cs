@@ -22,6 +22,37 @@ namespace AnketOtomasyonu.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("AnketOtomasyonu.Models.Entities.CachedUnit", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("LastSyncedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("ParentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UnitTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UnitTypeName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CachedUnits");
+                });
+
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.AdminPermission", b =>
                 {
                     b.Property<int>("Id")
@@ -181,6 +212,13 @@ namespace AnketOtomasyonu.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("UnitId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UnitName")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");

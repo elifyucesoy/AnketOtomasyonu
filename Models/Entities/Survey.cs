@@ -42,6 +42,19 @@ namespace AnketOtomasyonu.Models.Entities
         /// <summary>Anketi oluşturan adminin birimi (Normal admin filtresi için)</summary>
         public string? CreatedByBirim { get; set; }
 
+        // ── BİRİM BİLGİSİ (UnitList'ten) ─────────────────────────────────────
+        /// <summary>
+        /// SuperAdmin'in anket oluştururken seçtiği birimin API'deki Id'si.
+        /// UnitList endpointinden gelen birim Id'si. Raporlama ve filtreleme için.
+        /// </summary>
+        public int? UnitId { get; set; }
+
+        /// <summary>
+        /// SuperAdmin'in anket oluştururken seçtiği birimin adı (metin olarak saklanır).
+        /// UnitList endpointinden gelen birim adı. Raporlama kolaylığı için.
+        /// </summary>
+        public string? UnitName { get; set; }
+
         // ── SUPERADMIN ONAY SİSTEMİ ──────────────────────────────────────────
         /// <summary>
         /// SuperAdmin'in onay durumu.

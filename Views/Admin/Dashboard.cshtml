@@ -1,9 +1,10 @@
+@using AnketOtomasyonu.Authorization
 @using AnketOtomasyonu.Models.ViewModels
 @using AnketOtomasyonu.Models.Entities
 @model AdminDashboardViewModel
 @{
     ViewData["Title"] = "Yönetim Paneli";
-    var isSuperAdmin = User.IsInRole("SuperAdmin");
+    var isSuperAdmin = User.HasSuperAdminAccess();
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">

@@ -6,10 +6,23 @@ namespace AnketOtomasyonu.Services.Interfaces
     public interface ISurveyService
     {
         Task<Survey?> GetSurveyWithQuestionsAsync(int surveyId);
+
+        /// <summary>Tüm anketler + tüm yanıtlar (ağır). Yalnızca gerçekten tam graf gerektiğinde kullanın.</summary>
         Task<IEnumerable<Survey>> GetAllSurveysAsync();
+
+        /// <summary>Liste / ana sayfa / paneller için — yanıtları yüklemez, sayıları SQL ile hesaplar.</summary>
+        Task<IReadOnlyList<SurveySummaryDto>> GetAllSurveySummariesAsync();
+
         Task<IEnumerable<Survey>> GetActiveSurveysAsync();
         Task<IEnumerable<Survey>> GetActiveAnonymousSurveysAsync();
+
+        /// <summary>Anonim aktif anket listesi (PublicSurveys) — hafif.</summary>
+        Task<IReadOnlyList<SurveySummaryDto>> GetActiveAnonymousSurveySummariesAsync();
+
         Task<IEnumerable<Survey>> GetSurveysByCreatorAsync(string creatorUserId);
+
+        /// <summary>Admin anket listesi için — hafif.</summary>
+        Task<IReadOnlyList<SurveySummaryDto>> GetSurveySummariesByCreatorAsync(string creatorUserId);
         Task<IEnumerable<Survey>> GetSurveysByBirimAsync(string birim);
         Task<IEnumerable<Survey>> GetSurveysByBirimsAsync(List<string> birims);
         Task<Survey> CreateSurveyAsync(SurveyCreateDto dto, string creatorUserId, string creatorName, string? creatorBirim = null, bool isSuperAdmin = false);

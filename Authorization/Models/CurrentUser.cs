@@ -1,4 +1,6 @@
-﻿namespace AnketOtomasyonu.Authorization.Models
+﻿using System.Text.Json.Serialization;
+
+namespace AnketOtomasyonu.Authorization.Models
 {
     /// <summary>Selçuk Test API GetProfile yanıtı</summary>
     public class CurrentUser
@@ -16,6 +18,29 @@
         public Locale Locale { get; set; } = new();
         public ICollection<int>? UnitIds { get; set; }
         public string CorporateRegistrationNo { get; set; } = string.Empty;
+
+        /// <summary>Bazı profillerde doğrudan birim adı (idari personel vb.).</summary>
+        public string? BirimAdi { get; set; }
+
+        public string? UnitName { get; set; }
+
+        public string? PrimaryUnitName { get; set; }
+
+        /// <summary>Öğrenci / akademik senaryolarında fakülte metni.</summary>
+        public string? FakulteAdi { get; set; }
+
+        public string? BolumAdi { get; set; }
+
+        [JsonIgnore]
+        public string? ResolvedBirimOrUnit =>
+            FirstNonEmpty(BirimAdi, UnitName, PrimaryUnitName);
+
+        private static string? FirstNonEmpty(params string?[] values)
+        {
+            foreach (var v in values)
+                if (!string.IsNullOrWhiteSpace(v)) return v.Trim();
+            return null;
+        }
     }
 
     public class Locale

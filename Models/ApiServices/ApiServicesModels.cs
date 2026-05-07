@@ -9,6 +9,9 @@ namespace AnketOtomasyonu.Models.ApiServices
         public string? Name { get; set; }
         public string? Title { get; set; }
 
+        [JsonPropertyName("parentId")]
+        public int? ParentId { get; set; }
+
         [JsonIgnore]
         public string DisplayName => (Name ?? Title ?? "").Trim();
     }

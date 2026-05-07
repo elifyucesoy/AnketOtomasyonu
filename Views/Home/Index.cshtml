@@ -263,9 +263,9 @@ else
                             </a>
                         }
                         
-                        @if (Model.UserRole == "Admin" || Model.UserRole == "SuperAdmin")
+                        @if (Model.CanUseStaffSurveyTools)
                         {
-                            var controller = Model.UserRole == "SuperAdmin" ? "SuperAdmin" : "Admin";
+                            var controller = Model.PreferSuperAdminSurveyLinks ? "SuperAdmin" : "Admin";
                             <a asp-controller="@controller" asp-action="PreviewSurvey" asp-route-id="@survey.Id" class="btn btn-sm btn-outline-info w-100 mb-1">
                                 <i class="bi bi-eye"></i> Anketi Önizle
                             </a>
@@ -274,7 +274,7 @@ else
                         @if (survey.Status == "Taslak")
                         {
                             <span class="badge bg-warning text-dark mb-2">Taslak (Yayında Değil)</span>
-                            @if (Model.UserRole == "Admin" || Model.UserRole == "SuperAdmin")
+                            @if (Model.CanUseStaffSurveyTools)
                             {
                                 <a asp-controller="Admin" asp-action="EditSurvey" asp-route-id="@survey.Id" class="btn btn-sm btn-outline-secondary w-100">
                                     Düzenle

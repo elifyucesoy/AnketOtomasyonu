@@ -1,4 +1,5 @@
-﻿using AnketOtomasyonu.Models.Entities;
+﻿using AnketOtomasyonu.Models.DTOs;
+using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -25,7 +26,7 @@ namespace AnketOtomasyonu.Controllers
             if (string.IsNullOrEmpty(userId))
                 return RedirectToAction("Login", "Auth");
 
-            var surveys = await _surveyService.GetSurveysByCreatorAsync(userId);
+            var surveys = await _surveyService.GetSurveySummariesByCreatorAsync(userId);
             return View(surveys);
         }
 

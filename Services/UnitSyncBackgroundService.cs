@@ -1,18 +1,22 @@
+using AnketOtomasyonu.Data;
+using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace AnketOtomasyonu.Services
 {
     /// <summary>
-    /// Ayda bir kez Unit ve UnitType listelerini API'den çekip cache'i yenileyen background job.
-    /// İlk başlatmada 5 dakika bekler (uygulama ayağa kalksın), sonra 30 günde bir çalışır.
+    /// Haftada bir kez System User ile UnitList endpointine istek atar,
+    /// tüm birimleri hem MemoryCache'e hem de local CachedUnits tablosuna kaydeder.
+    /// İlk başlatmada 5 dakika bekler (uygulama ayağa kalksın), sonra 7 günde bir çalışır.
     /// </summary>
     public class UnitSyncBackgroundService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<UnitSyncBackgroundService> _logger;
 
-        private static readonly TimeSpan InitialDelay  = TimeSpan.FromMinutes(5);
-        private static readonly TimeSpan SyncInterval  = TimeSpan.FromDays(30);
+        private static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(15); // İlk çalışma hızlı
+        private static readonly TimeSpan SyncInterval = TimeSpan.FromDays(7);
 
         public UnitSyncBackgroundService(
             IServiceScopeFactory scopeFactory,
@@ -25,14 +29,11 @@ namespace AnketOtomasyonu.Services
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("[UnitSync] Background job başlatıldı. İlk senkronizasyon {D} sonra.", InitialDelay);
-
-            // Uygulama başlarken bekle
             await Task.Delay(InitialDelay, stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 await RunSyncAsync(stoppingToken);
-
                 _logger.LogInformation("[UnitSync] Bir sonraki senkronizasyon {D} sonra.", SyncInterval);
                 await Task.Delay(SyncInterval, stoppingToken);
             }
@@ -42,21 +43,63 @@ namespace AnketOtomasyonu.Services
         {
             try
             {
-                using var scope      = _scopeFactory.CreateScope();
-                var unitApiService   = scope.ServiceProvider.GetRequiredService<IUnitApiService>();
-                var configuration    = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+                using var scope         = _scopeFactory.CreateScope();
+                var unitApiService      = scope.ServiceProvider.GetRequiredService<IUnitApiService>();
+                var db                  = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-                // Cache zaten doluysa atla (elle tetiklenmediyse)
-                if (unitApiService.IsCached())
+                // 1. System User ile login ol, UnitList çek, MemoryCache yenile
+                var (unitCount, typeCount) = await unitApiService.ForceRefreshAsync(string.Empty);
+                _logger.LogInformation("[UnitSync] API'den {U} birim, {T} bölüm çekildi.", unitCount, typeCount);
+
+                if (unitCount == 0)
                 {
-                    _logger.LogInformation("[UnitSync] Cache dolu, otomatik senkronizasyon atlandı.");
+                    _logger.LogWarning("[UnitSync] Birim listesi boş döndü, DB yazımı atlandı.");
                     return;
                 }
 
-                // Servis hesabı token'ı yoksa GetAllUnitsAsync kendi alır
-                var (unitCount, typeCount) = await unitApiService.ForceRefreshAsync(string.Empty);
+                // 2. Güncel birimleri al (cache'den — ForceRefresh zaten doldurdu)
+                var units = await unitApiService.GetAllUnitsAsync();
 
-                _logger.LogInformation("[UnitSync] Senkronizasyon tamamlandı: {U} birim, {T} bölüm.", unitCount, typeCount);
+                // 3. DB'ye upsert — mevcut kayıtları güncelle, yenileri ekle
+                var now = DateTime.UtcNow;
+                var incoming = units.Select(u => new CachedUnit
+                {
+                    Id           = u.Id,
+                    Name         = u.Name,
+                    ParentId     = u.ParentId,
+                    UnitTypeId   = u.UnitTypeId,
+                    UnitTypeName = u.UnitTypeName,
+                    IsActive     = u.IsActive,
+                    LastSyncedAt = now
+                }).ToList();
+
+                // Mevcut ID'leri çek
+                var existingIds = (await db.CachedUnits.Select(x => x.Id).ToListAsync(ct)).ToHashSet();
+
+                var toAdd    = incoming.Where(u => !existingIds.Contains(u.Id)).ToList();
+                var toUpdate = incoming.Where(u =>  existingIds.Contains(u.Id)).ToList();
+
+                if (toAdd.Count > 0)
+                    await db.CachedUnits.AddRangeAsync(toAdd, ct);
+
+                foreach (var upd in toUpdate)
+                {
+                    db.CachedUnits.Update(upd);
+                }
+
+                // Artık olmayan (deaktif) kayıtları sil
+                var incomingIds = incoming.Select(u => u.Id).ToHashSet();
+                var toDelete = await db.CachedUnits
+                    .Where(u => !incomingIds.Contains(u.Id))
+                    .ToListAsync(ct);
+                if (toDelete.Count > 0)
+                    db.CachedUnits.RemoveRange(toDelete);
+
+                await db.SaveChangesAsync(ct);
+
+                _logger.LogInformation(
+                    "[UnitSync] DB güncellendi: +{A} eklendi, ~{U} güncellendi, -{D} silindi. Toplam: {T}",
+                    toAdd.Count, toUpdate.Count, toDelete.Count, incoming.Count);
             }
             catch (OperationCanceledException)
             {

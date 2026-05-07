@@ -1,5 +1,6 @@
 using AnketOtomasyonu.Authorization;
 using AnketOtomasyonu.Data;
+using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
+using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
 {
@@ -20,6 +22,7 @@ namespace AnketOtomasyonu.Controllers
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<SuperAdminController> _logger;
+        private readonly IUnitApiService _unitApiService;
 
         public SuperAdminController(
             ISurveyService surveyService,
@@ -28,7 +31,8 @@ namespace AnketOtomasyonu.Controllers
             IBirimService birimService,
             IHttpClientFactory httpClientFactory,
             IConfiguration configuration,
-            ILogger<SuperAdminController> logger)
+            ILogger<SuperAdminController> logger,
+            IUnitApiService unitApiService)
         {
             _surveyService = surveyService;
             _responseService = responseService;
@@ -37,20 +41,98 @@ namespace AnketOtomasyonu.Controllers
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _logger = logger;
+            _unitApiService = unitApiService;
+        }
+
+        // ─── BİRİM DURUM TANILAMA ──────────────────────────────────────────────
+        [HttpGet]
+        public async Task<IActionResult> UnitDiag()
+        {
+            int dbCount = 0;
+            string dbError = "";
+            string apiResult = "";
+
+            try { dbCount = await _db.CachedUnits.CountAsync(); }
+            catch (Exception ex) { dbError = ex.Message; }
+
+            try
+            {
+                var (u, _) = await _unitApiService.ForceRefreshAsync(string.Empty);
+                apiResult = u > 0 ? $"✅ API'den {u} birim alındı" : "❌ API 0 birim döndürdü";
+            }
+            catch (Exception ex) { apiResult = $"❌ API hatası: {ex.Message}"; }
+
+            return Content(
+                $"DB CachedUnits satır sayısı: {dbCount}\n" +
+                $"DB hatası: {(string.IsNullOrEmpty(dbError) ? "yok" : dbError)}\n" +
+                $"API test: {apiResult}",
+                "text/plain; charset=utf-8");
+        }
+
+        // ─── BİRİM SENKRONİZASYONU (Manuel Tetik) ──────────────────────────────
+        // Dashboard'daki "Birimleri Senkronize Et" butonundan çağrılır.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [ActionName("SyncUnitCatalog")]
+        public async Task<IActionResult> SyncUnits()
+        {
+            try
+            {
+                // 1. API'den tüm birimleri çek (System User ile otomatik login)
+                var (unitCount, _) = await _unitApiService.ForceRefreshAsync(string.Empty);
+                if (unitCount == 0)
+                {
+                    TempData["Error"] = "❌ API'den birim listesi alınamadı. /SuperAdmin/UnitDiag adresine giderek detaylı hatayı görebilirsiniz.";
+                    return RedirectToAction("Dashboard");
+                }
+
+                var units = await _unitApiService.GetAllUnitsAsync();
+                var now = DateTime.UtcNow;
+                var incoming = units.Select(u => new CachedUnit
+                {
+                    Id = u.Id, Name = u.Name, ParentId = u.ParentId,
+                    UnitTypeId = u.UnitTypeId, UnitTypeName = u.UnitTypeName,
+                    IsActive = u.IsActive, LastSyncedAt = now
+                }).ToList();
+
+                // 2. DB'ye upsert
+                var existingIds = (await _db.CachedUnits.Select(x => x.Id).ToListAsync()).ToHashSet();
+                var toAdd    = incoming.Where(u => !existingIds.Contains(u.Id)).ToList();
+                var toUpdate = incoming.Where(u =>  existingIds.Contains(u.Id)).ToList();
+
+                if (toAdd.Count > 0) await _db.CachedUnits.AddRangeAsync(toAdd);
+                foreach (var upd in toUpdate) _db.CachedUnits.Update(upd);
+
+                var staleIds = existingIds.Except(incoming.Select(u => u.Id)).ToList();
+                if (staleIds.Count > 0)
+                {
+                    var toRemove = await _db.CachedUnits.Where(u => staleIds.Contains(u.Id)).ToListAsync();
+                    _db.CachedUnits.RemoveRange(toRemove);
+                }
+
+                await _db.SaveChangesAsync();
+                TempData["Success"] = $"✅ {incoming.Count} birim başarıyla senkronize edildi. Artık anket oluştururken birim seçebilirsiniz.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[SyncUnits] Senkronizasyon hatası.");
+                TempData["Error"] = $"❌ Hata: {ex.Message}";
+            }
+            return RedirectToAction("Dashboard");
         }
 
         // ─── DASHBOARD ──────────────────────────────────────────────────────────
         [HttpGet]
         public async Task<IActionResult> Dashboard(string? birim = null, string? statusFilter = null, int page = 1)
         {
-            var allSurveys = (await _surveyService.GetAllSurveysAsync()).ToList();
+            var allSurveys = await _surveyService.GetAllSurveySummariesAsync();
 
             var allBirimler = _birimService.GetAllNames();
 
             // Birim filtresi
             var turkish = new CultureInfo("tr-TR");
             var birimFiltered = string.IsNullOrEmpty(birim)
-                ? allSurveys
+                ? allSurveys.ToList()
                 : allSurveys
                     .Where(s => turkish.CompareInfo.Compare(s.CreatedByBirim, birim, CompareOptions.IgnoreCase) == 0)
                     .ToList();
@@ -84,7 +166,7 @@ namespace AnketOtomasyonu.Controllers
                                                             && s.ApprovalStatus != ApprovalStatus.Pending),
                 PendingApprovalCount = birimFiltered.Count(s => s.ApprovalStatus == ApprovalStatus.Pending),
                 RejectedCount       = birimFiltered.Count(s => s.ApprovalStatus == ApprovalStatus.Rejected),
-                TotalResponses      = birimFiltered.Sum(s => s.Responses.Count),
+                TotalResponses      = birimFiltered.Sum(s => s.ResponseCount),
                 TotalAdminCount     = await _db.AdminPermissions.CountAsync(),
                 SelectedBirim  = birim,
                 StatusFilter   = statusFilter,
@@ -102,7 +184,7 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> SurveyApprovals(string? birim = null)
         {
-            var allSurveys = (await _surveyService.GetAllSurveysAsync()).ToList();
+            var allSurveys = await _surveyService.GetAllSurveySummariesAsync();
 
             var allBirimler = _birimService.GetAllNames();
 
@@ -170,40 +252,51 @@ namespace AnketOtomasyonu.Controllers
 
         // ─── SONUÇLAR ───────────────────────────────────────────────────────────
         [HttpGet]
-        public async Task<IActionResult> AllResults(string? birim = null, string? startDate = null, string? endDate = null)
+        public async Task<IActionResult> AllResults(string? birim = null, string? startDate = null, string? endDate = null, string dateSort = "newest")
         {
-            var allSurveys = (await _surveyService.GetAllSurveysAsync()).ToList();
+            var allSurveys = await _surveyService.GetAllSurveySummariesAsync();
             var allBirimler = _birimService.GetAllNames();
 
-            // Türkiye saati ile tarih aralığı filtresi
-            var turkeyZone = TimeZoneInfo.FindSystemTimeZoneById(
-                System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)
-                    ? "Turkey Standard Time" : "Europe/Istanbul");
+            var turkish = new CultureInfo("tr-TR");
+            var sortOldestFirst = string.Equals(dateSort, "oldest", StringComparison.OrdinalIgnoreCase);
 
             DateTime? start = null, end = null;
             if (!string.IsNullOrEmpty(startDate) && DateTime.TryParseExact(startDate, "yyyy-MM-dd",
-                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var sd))
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var sd))
                 start = sd;
             if (!string.IsNullOrEmpty(endDate) && DateTime.TryParseExact(endDate, "yyyy-MM-dd",
-                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var ed))
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var ed))
                 end = ed.AddDays(1).AddSeconds(-1); // gün sonu dahil
 
-            var filtered = allSurveys
-                .Where(s => string.IsNullOrEmpty(birim) || s.CreatedByBirim == birim)
-                .Where(s => s.Responses.Count > 0)
-                .Where(s => start == null || s.CreatedAt >= start)
-                .Where(s => end == null || s.CreatedAt <= end)
-                .ToList();
+            // Dashboard ile aynı kaynak + birim eşlemesi (Türkçe I/İ); yanıt sayısı 0 olsa da listelenir (detay boş olabilir).
+            IEnumerable<SurveySummaryDto> filtered = allSurveys;
+
+            if (!string.IsNullOrEmpty(birim))
+            {
+                filtered = filtered.Where(s =>
+                    turkish.CompareInfo.Compare(s.CreatedByBirim ?? "", birim, CompareOptions.IgnoreCase) == 0);
+            }
+
+            if (start.HasValue)
+                filtered = filtered.Where(s => s.CreatedAt >= start.Value);
+            if (end.HasValue)
+                filtered = filtered.Where(s => s.CreatedAt <= end.Value);
+
+            var ordered = sortOldestFirst
+                ? filtered.OrderBy(s => s.CreatedAt)
+                : filtered.OrderByDescending(s => s.CreatedAt);
+            var list = ordered.ToList();
 
             var vm = new SuperAdminResultsViewModel
             {
                 SelectedBirim = birim,
                 AllBirimler = allBirimler,
-                Surveys = filtered.Select(s => MapToListItem(s)).ToList(),
+                Surveys = list.Select(s => MapToListItem(s)).ToList(),
                 StartDate = start,
                 EndDate = end,
                 StartDateStr = startDate,
-                EndDateStr = endDate
+                EndDateStr = endDate,
+                DateSort = sortOldestFirst ? "oldest" : "newest"
             };
 
             return View(vm);
@@ -407,7 +500,7 @@ namespace AnketOtomasyonu.Controllers
         }
 
         // ─── YARDIMCI ───────────────────────────────────────────────────────────
-        private static SurveyListItemViewModel MapToListItem(Survey s) => new()
+        private static SurveyListItemViewModel MapToListItem(SurveySummaryDto s) => new()
         {
             Id = s.Id,
             Title = s.Title,
@@ -427,8 +520,8 @@ namespace AnketOtomasyonu.Controllers
                 SurveyStatus.Inactive => "bg-secondary",
                 _ => "bg-danger"
             },
-            QuestionCount  = s.Questions.Count,
-            ResponseCount  = s.Responses.Count,
+            QuestionCount  = s.QuestionCount,
+            ResponseCount  = s.ResponseCount,
             CreatedByName  = s.CreatedByName,
             CreatedByBirim = s.CreatedByBirim ?? "-",
             CreatedAt      = s.CreatedAt,

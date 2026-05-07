@@ -14,6 +14,11 @@ namespace AnketOtomasyonu.Models.ViewModels
         [Display(Name = "Açıklama")]
         public string Description { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Anketi kimin dolduracağını sınırlar; değerler: Employee, Student, Akademik, Idari.
+        /// Selçuk izin eşlemesi: <b>Akademik</b> hedefi ANKET_API_AKADEMIK (akademik kadro);
+        /// <b>Personel</b> (Employee) ve <b>İdari</b> hedefleri ANKET_IDARI kapsamındaki personel ile uyumludur.
+        /// </summary>
         [Display(Name = "Hedef Roller")]
         public List<string> TargetRoles { get; set; } = new();
 
@@ -41,8 +46,10 @@ namespace AnketOtomasyonu.Models.ViewModels
 
         public List<QuestionCreateViewModel> Questions { get; set; } = new();
 
-        /// <summary>Mevcut roller (checkbox listesi için) — API'deki UserType değerlerine karşılık gelir</summary>
-        public List<string> AvailableRoles { get; set; } = new() { "Employee", "Student" };
+        /// <summary>
+        /// Checkbox listesi; <c>Employee</c> arayüzde "Personel" olarak gösterilir.
+        /// </summary>
+        public List<string> AvailableRoles { get; set; } = new() { "Employee", "Student", "Akademik", "Idari" };
     }
 
     public class QuestionCreateViewModel

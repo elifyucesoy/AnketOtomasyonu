@@ -37,6 +37,62 @@ namespace AnketOtomasyonu.Services.Implementations
                 .ToListAsync();
         }
 
+        public async Task<IReadOnlyList<SurveySummaryDto>> GetAllSurveySummariesAsync()
+        {
+            return await SurveySummariesQuery(_context.Surveys.AsNoTracking())
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<IReadOnlyList<SurveySummaryDto>> GetSurveySummariesByCreatorAsync(string creatorUserId)
+        {
+            return await SurveySummariesQuery(
+                    _context.Surveys.AsNoTracking().Where(s => s.CreatedByUserId == creatorUserId))
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<IReadOnlyList<SurveySummaryDto>> GetActiveAnonymousSurveySummariesAsync()
+        {
+            var now = DateTime.Now;
+            return await SurveySummariesQuery(
+                    _context.Surveys.AsNoTracking()
+                        .Where(s => s.Status == SurveyStatus.Active
+                            && s.IsAnonymous
+                            && (s.StartDate == null || s.StartDate <= now)
+                            && (s.EndDate == null || s.EndDate >= now)))
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+        }
+
+        private static IQueryable<SurveySummaryDto> SurveySummariesQuery(IQueryable<Survey> source)
+        {
+            return source.Select(s => new SurveySummaryDto
+            {
+                Id = s.Id,
+                Title = s.Title,
+                Description = s.Description,
+                Status = s.Status,
+                CreatedByUserId = s.CreatedByUserId,
+                CreatedByName = s.CreatedByName,
+                CreatedAt = s.CreatedAt,
+                StartDate = s.StartDate,
+                EndDate = s.EndDate,
+                TargetRoles = s.TargetRoles,
+                IsAnonymous = s.IsAnonymous,
+                TargetFaculties = s.TargetFaculties,
+                TargetDepartments = s.TargetDepartments,
+                CreatedByBirim = s.CreatedByBirim,
+                UnitId = s.UnitId,
+                UnitName = s.UnitName,
+                ApprovalStatus = s.ApprovalStatus,
+                ApprovalNote = s.ApprovalNote,
+                ApprovedAt = s.ApprovedAt,
+                QuestionCount = s.Questions.Count,
+                ResponseCount = s.Responses.Count
+            });
+        }
+
         public async Task<IEnumerable<Survey>> GetActiveSurveysAsync()
         {
             // Debug: Şimdilik tarih kısıtlamasını kaldıralım, sadece Status=Active olanları çekelim
@@ -122,6 +178,8 @@ namespace AnketOtomasyonu.Services.Implementations
                 CreatedByUserId = creatorUserId,
                 CreatedByName = creatorName ?? string.Empty,
                 CreatedByBirim = dto.CreatedByBirim ?? creatorBirim ?? string.Empty,
+                UnitId = dto.UnitId,
+                UnitName = dto.UnitName,
                 Status = SurveyStatus.Draft,
                 ApprovalStatus = isSuperAdmin ? ApprovalStatus.Approved : ApprovalStatus.Pending,
                 ApprovalNote = isSuperAdmin ? "SuperAdmin tarafından oluşturuldu" : null,
@@ -230,6 +288,8 @@ namespace AnketOtomasyonu.Services.Implementations
                 ? string.Join(",", dto.TargetDepartments)
                 : null;
             survey.CreatedByBirim = dto.CreatedByBirim;
+            if (dto.UnitId.HasValue) survey.UnitId = dto.UnitId;
+            if (dto.UnitName != null) survey.UnitName = dto.UnitName;
             survey.UpdatedAt = DateTime.UtcNow;
 
             _context.SurveyBirimler.RemoveRange(survey.TargetUnits);

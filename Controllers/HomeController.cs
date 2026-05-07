@@ -1,3 +1,6 @@
+using AnketOtomasyonu.Authorization;
+using AnketOtomasyonu.Helpers;
+using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
@@ -23,56 +26,40 @@ namespace AnketOtomasyonu.Controllers
         {
             var userRole = User.FindFirstValue(ClaimTypes.Role);
             var isAuth = User.Identity?.IsAuthenticated == true;
+            var hasSuperClaim = User.HasAnketPermission(AnketPermissions.SuperAdmin);
 
-            IEnumerable<Survey> allSurveys = (await _surveyService.GetAllSurveysAsync()).ToList();
-            
-            IEnumerable<Survey> filteredSurveys;
-            if (isAuth && (userRole == "SuperAdmin" || userRole == "Admin" || userRole == "Akademik"))
+            var allSummaries = await _surveyService.GetAllSurveySummariesAsync();
+
+            // Çoklu ANKET_*: Admin + İdari + Akademik vb. birlikte — geniş katalog / birim filtresi birleşik uygulanır
+            IEnumerable<SurveySummaryDto> filteredSurveys;
+            if (isAuth && User.HasStaffSurveyExtendedCatalogAccess(userRole))
             {
-                // Yetkili kullanıcılar her şeyi görebilir (Taslak dahil)
-                filteredSurveys = allSurveys;
+                filteredSurveys = allSummaries;
             }
             else
             {
-                // Öğrenci, Personel ve Ziyaretçiler sadece AKTİF anketleri görür
-                filteredSurveys = allSurveys.Where(s => s.Status == SurveyStatus.Active);
+                filteredSurveys = allSummaries.Where(s => s.Status == SurveyStatus.Active);
             }
 
             var surveys = filteredSurveys.AsEnumerable();
 
             if (isAuth)
             {
-                if (userRole == "SuperAdmin")
+                if (User.HasSuperAdminAccess())
                 {
                     // SuperAdmin her şeyi görür
                 }
-                else if (userRole == "Admin")
+                else if (User.HasAnyStaffSurveyPermission() || AnketPermissionClaims.IsStaffSurveyRole(userRole))
                 {
-                    // Admin kendi biriminin anketlerini + MERKEZ anketlerini + kendisine hedeflemiş anketleri görür
-                    var unit = User.FindFirstValue("PersonelBirim")?.Trim();
+                    // Personel izinlerinden herhangi biri veya Admin/Akademik/Employee rolü: birim + MERKEZ + aktif
                     surveys = surveys.Where(s =>
-                        s.Status == SurveyStatus.Active || // Aktif olan her şeyi görsün
+                        s.Status == SurveyStatus.Active ||
                         string.Equals(s.CreatedByBirim, "MERKEZ", StringComparison.OrdinalIgnoreCase) ||
-                        (!string.IsNullOrEmpty(unit) && string.Equals(s.CreatedByBirim, unit, StringComparison.OrdinalIgnoreCase)) ||
-                        (!string.IsNullOrEmpty(s.TargetFaculties) && !string.IsNullOrEmpty(unit) &&
-                         s.TargetFaculties.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                          .Contains(unit, StringComparer.OrdinalIgnoreCase))
-                    );
+                        SurveyUnitMatchHelper.MatchesSurveySummary(User, s));
                 }
-                else if (userRole == "Akademik")
+                else
                 {
-                    // Akademik personel: kendi biriminin anketlerini görür (read-only, dolduramaz)
-                    var unit = User.FindFirstValue("PersonelBirim");
-                    surveys = surveys.Where(s =>
-                        s.Status == SurveyStatus.Active || // Aktif olan her şeyi görsün
-                        (!string.IsNullOrEmpty(unit) && string.Equals(s.CreatedByBirim, unit, StringComparison.OrdinalIgnoreCase)) ||
-                        string.Equals(s.CreatedByBirim, "MERKEZ", StringComparison.OrdinalIgnoreCase)
-                    );
-                }
-                else 
-                {
-                    // Öğrenci ve Employee: Tüm AKTİF anketleri görür (filtreleme artık yok, hepsi listelenecek)
-                    // (Fill aşamasında yetki kontrolü zaten yapılıyor)
+                    // Öğrenci vb.: Fill’de detaylı kontrol; listede yalnızca aktif set (yukarıda)
                 }
             }
             else
@@ -85,6 +72,10 @@ namespace AnketOtomasyonu.Controllers
                 UserFullName = User.FindFirstValue(ClaimTypes.Name),
                 UserRole = User.FindFirstValue(ClaimTypes.Role),
                 IsLoggedIn = User.Identity?.IsAuthenticated == true,
+                CanUseStaffSurveyTools = User.HasSuperAdminAccess()
+                    || User.HasAnketPermission(AnketPermissions.Admin)
+                    || userRole == "SuperAdmin" || userRole == "Admin",
+                PreferSuperAdminSurveyLinks = hasSuperClaim || userRole == "SuperAdmin",
                 Surveys = surveys.Select(s => new SurveyListItemViewModel
                 {
                     Id = s.Id,
@@ -105,8 +96,8 @@ namespace AnketOtomasyonu.Controllers
                         SurveyStatus.Inactive => "bg-secondary",
                         _ => "bg-danger"
                     },
-                    QuestionCount = s.Questions.Count,
-                    ResponseCount = s.Responses.Count,
+                    QuestionCount = s.QuestionCount,
+                    ResponseCount = s.ResponseCount,
                     CreatedByName = s.CreatedByName,
                     CreatedByBirim = s.CreatedByBirim ?? string.Empty,
                     CreatedAt = s.CreatedAt,
@@ -124,24 +115,22 @@ namespace AnketOtomasyonu.Controllers
             return View(vm);
         }
 
-        [Authorize(Policy = "ANKET_API_ADMIN_OR_ANKET_API_STUDENT")]
+        [Authorize(Policy = AnketPermissions.PolicySurveyResultsEntry)]
         [HttpGet]
         public async Task<IActionResult> Results(int id)
         {
             var userRole = User.FindFirstValue(ClaimTypes.Role);
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var personelBirim = User.FindFirstValue("PersonelBirim");
 
             var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
             if (survey == null) return NotFound();
 
-            // Sadece kendi biriminin anketlerinin sonuçlarını görebilir,
-            // (veya SuperAdmin hepsini görür, kendi oluşturduğuysa da görür)
-            bool canView = false;
-            if (userRole == "SuperAdmin") canView = true;
-            else if (userRole == "Admin" && !string.IsNullOrEmpty(personelBirim) && string.Equals(survey.CreatedByBirim, personelBirim, StringComparison.OrdinalIgnoreCase)) canView = true;
-            else if (userRole == "Akademik" && !string.IsNullOrEmpty(personelBirim) && string.Equals(survey.CreatedByBirim, personelBirim, StringComparison.OrdinalIgnoreCase)) canView = true;
-            else if (survey.CreatedByUserId == userId) canView = true; // Oluşturan kişi
+            // Birim eşleşmesi + Admin / Akademik / İdari izinlerinden herhangi biri (çoklu yetki birleşimi)
+            bool unitMatches = SurveyUnitMatchHelper.MatchesSurveyBirimStrings(User, survey.CreatedByBirim, survey.TargetFaculties);
+
+            bool canView = User.HasSuperAdminAccess()
+                || survey.CreatedByUserId == userId
+                || (unitMatches && User.HasAnySurveyResultsStaffCapability(userRole));
 
             if (!canView) return Unauthorized();
 

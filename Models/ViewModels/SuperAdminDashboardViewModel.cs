@@ -78,5 +78,8 @@ namespace AnketOtomasyonu.Models.ViewModels
         public DateTime? EndDate { get; set; }
         public string? StartDateStr { get; set; }
         public string? EndDateStr { get; set; }
+
+        /// <summary><c>newest</c> = oluşturma tarihi azalan; <c>oldest</c> = artan.</summary>
+        public string DateSort { get; set; } = "newest";
     }
 }
