@@ -1,279 +1,358 @@
 @using AnketOtomasyonu.Models.DTOs
 @using AnketOtomasyonu.Models.Entities
+@using System.Text.Json
 @model SurveyResultDto
 @{
-    ViewData["Title"] = "Anket Sonuçları - " + Model.Title;
+    ViewData["Title"] = "Anket Sonuçları – " + Model.Title;
+
+    var opts = new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
     var fakulteler = ViewBag.Fakulteler as List<string> ?? new List<string>();
-    var bolumler = ViewBag.Bolumler as List<string> ?? new List<string>();
+    var bolumler   = ViewBag.Bolumler  as List<string> ?? new List<string>();
+    var birimler   = ViewBag.Birimler  as List<string> ?? new List<string>();
     var selFakulte = ViewBag.SelectedFakulte as string;
-    var selBolum = ViewBag.SelectedBolum as string;
+    var selBolum   = ViewBag.SelectedBolum   as string;
+    var selBirim   = ViewBag.SelectedBirim   as string;
 
-    // Dağılım verileri hazırlığı
-    var fakulteData = Model.Respondents
+    string dashboardUrl = User.HasAnketPermission(AnketPermissions.SuperAdmin)
+        ? Url.Action("Dashboard", "SuperAdmin")!
+        : User.HasAnketPermission(AnketPermissions.Admin)
+            ? Url.Action("Dashboard", "Admin")!
+            : Url.Action("Index", "Home")!;
+
+    // ── Dağılım verileri ──
+    var fItems = Model.Respondents
         .Where(r => !string.IsNullOrEmpty(r.FakulteAdi))
-        .GroupBy(r => r.FakulteAdi)
+        .GroupBy(r => r.FakulteAdi!)
         .Select(g => new { Label = g.Key, Count = g.Count() })
-        .OrderByDescending(x => x.Count)
-        .ToList();
+        .OrderByDescending(x => x.Count).ToList();
 
-    var bolumData = Model.Respondents
+    var brItems = Model.Respondents
+        .Where(r => !string.IsNullOrEmpty(r.BirimAdi))
+        .GroupBy(r => r.BirimAdi!)
+        .Select(g => new { Label = g.Key, Count = g.Count() })
+        .OrderByDescending(x => x.Count).Take(12).ToList();
+
+    var boItems = Model.Respondents
         .Where(r => !string.IsNullOrEmpty(r.BolumAdi))
-        .GroupBy(r => r.BolumAdi)
+        .GroupBy(r => r.BolumAdi!)
         .Select(g => new { Label = g.Key, Count = g.Count() })
-        .OrderByDescending(x => x.Count)
-        .Take(15) // Çok fazla bölüm varsa ilk 15'i göster
-        .ToList();
+        .OrderByDescending(x => x.Count).Take(12).ToList();
 
-    var dashboardUrl = User.HasSuperAdminAccess()
-        ? Url.Action("Dashboard", "SuperAdmin")
-        : Url.Action("Dashboard", "Admin");
+    // ── Likert özet ──
+    var likertQs = Model.Questions.Where(q => q.QuestionType == QuestionType.Likert && q.AverageSatisfaction > 0).ToList();
+    var avgSat   = likertQs.Any() ? likertQs.Average(q => q.AverageSatisfaction) : 0.0;
+    var totalResp = Model.TotalResponses;
+
+    // ── JSON ──
+    var fLabels  = JsonSerializer.Serialize(fItems.Select(x => x.Label).ToList(), opts);
+    var fCounts  = JsonSerializer.Serialize(fItems.Select(x => x.Count).ToList(), opts);
+    var brLabels = JsonSerializer.Serialize(brItems.Select(x => x.Label).ToList(), opts);
+    var brCounts = JsonSerializer.Serialize(brItems.Select(x => x.Count).ToList(), opts);
+    var boLabels = JsonSerializer.Serialize(boItems.Select(x => x.Label).ToList(), opts);
+    var boCounts = JsonSerializer.Serialize(boItems.Select(x => x.Count).ToList(), opts);
+
+    var likertLabels = JsonSerializer.Serialize(likertQs.Select(q => q.QuestionText.Length > 40 ? q.QuestionText.Substring(0,40)+"…" : q.QuestionText).ToList(), opts);
+    var likertScores = JsonSerializer.Serialize(likertQs.Select(q => Math.Round(q.AverageSatisfaction,2)).ToList(), opts);
 }
 
+@section Styles {
 <style>
-    :root {
-        --primary-color: #004a99;
-        --secondary-color: #F9BC00;
-        --accent-color: #7c3aed;
-        --bg-light: #f8fafc;
-    }
-    body { background-color: var(--bg-light); }
-    .result-card { border-radius: 16px; border: none; box-shadow: 0 10px 25px rgba(0,0,0,0.05); transition: all 0.3s ease; background: #fff; }
-    .result-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.1); }
-    .filter-card { background: linear-gradient(135deg, #004a99, #003366); color: white; border-radius: 16px; padding: 25px; margin-bottom: 30px; }
-    .stat-card { border-radius: 16px; padding: 20px; color: white; position: relative; overflow: hidden; }
-    .stat-card i { position: absolute; right: 15px; bottom: 10px; font-size: 3.5rem; opacity: 0.2; }
-    .chart-container { position: relative; margin: auto; height: 350px; width: 100%; }
-    .progress { height: 12px; border-radius: 10px; background-color: #f1f5f9; border: 1px solid #e2e8f0; }
-    .progress-bar { border-radius: 10px; font-weight: 600; font-size: 10px; }
-    .text-selcuk { color: var(--primary-color); }
-    .badge-soft-primary { background-color: rgba(0, 74, 153, 0.1); color: var(--primary-color); }
+    :root { --blue:#2563eb; --blue-light:#eff6ff; --blue-mid:#1d4ed8; }
+    .stat-card  { border-radius:16px; padding:22px 20px; color:#fff; position:relative; overflow:hidden; }
+    .stat-card .sico { position:absolute; right:14px; bottom:8px; font-size:3.2rem; opacity:.15; }
+    .res-card   { border-radius:16px; border:none; box-shadow:0 4px 20px rgba(37,99,235,.08); background:#fff; }
+    .filter-bar { background:linear-gradient(135deg,#1d4ed8,#2563eb); border-radius:16px; padding:20px 24px; }
+    .sec-title  { font-size:.95rem; font-weight:700; color:#1e3a8a; border-left:4px solid var(--blue); padding-left:10px; margin-bottom:16px; }
+    .ch300 { position:relative; height:300px; }
+    .ch240 { position:relative; height:240px; }
+    .ch180 { position:relative; height:180px; }
+    .q-chip { background:var(--blue-light); color:var(--blue); border-radius:20px; padding:3px 12px; font-size:.76rem; font-weight:600; }
+    .open-box { background:#f0f9ff; border-left:4px solid var(--blue); border-radius:8px; padding:10px 14px; margin-bottom:8px; font-size:.84rem; line-height:1.5; }
+    .pbar-wrap { height:16px; border-radius:8px; overflow:hidden; background:#e2e8f0; margin-top:4px; }
+    .pbar-fill  { height:100%; border-radius:8px; background:linear-gradient(90deg,#2563eb,#60a5fa); transition:width .6s ease; }
+    .avg-badge  { display:inline-flex; align-items:center; gap:4px; background:#fef3c7; color:#92400e; border-radius:20px; padding:3px 12px; font-size:.78rem; font-weight:700; }
+    .tab-pill .nav-link { border-radius:20px; color:#64748b; font-size:.82rem; font-weight:600; padding:5px 14px; }
+    .tab-pill .nav-link.active { background:var(--blue); color:#fff; }
+    @@media print { .no-print{display:none!important;} body{font-size:12px;} }
 </style>
+}
 
-<div class="container-fluid py-4 px-lg-5">
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2 fw-bold text-selcuk mb-1"><i class="bi bi-pie-chart-fill me-2"></i>Anket Analiz Paneli</h1>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item"><a href="@dashboardUrl">Panel</a></li>
-                    <li class="breadcrumb-item active">@Model.Title</li>
-                </ol>
-            </nav>
-        </div>
-        <div class="btn-group shadow-sm">
-            <button onclick="window.print()" class="btn btn-white border px-4 rounded-start">
-                <i class="bi bi-printer me-2"></i>PDF / Yazdır
-            </button>
-            <a href="@dashboardUrl" class="btn btn-dark px-4 rounded-end">
-                <i class="bi bi-arrow-left me-2"></i>Listeye Dön
-            </a>
-        </div>
+<!-- ── BAŞLIK ── -->
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4 no-print">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-bar-chart-fill me-2" style="color:var(--blue);"></i>Anket Sonuç Raporu</h2>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0 small">
+                <li class="breadcrumb-item"><a href="@dashboardUrl">Panel</a></li>
+                <li class="breadcrumb-item active text-truncate" style="max-width:360px;">@Model.Title</li>
+            </ol>
+        </nav>
     </div>
+    <div class="d-flex gap-2 flex-wrap no-print">
+        <button onclick="window.print()" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-printer me-1"></i>Yazdır
+        </button>
+        <a href="@dashboardUrl" class="btn btn-sm text-white" style="background:var(--blue);">
+            <i class="bi bi-arrow-left me-1"></i>Listeye Dön
+        </a>
+    </div>
+</div>
 
-    <!-- FILTERS -->
-    <div class="filter-card shadow">
-        <form method="get" class="row g-3 align-items-end">
-            <input type="hidden" name="id" value="@Model.SurveyId" />
-            <div class="col-md-4">
-                <label class="form-label small fw-bold text-white-50">Fakülte / Birim Filtresi</label>
-                <select name="fakulte" class="form-select border-0 shadow-sm" style="height: 45px; border-radius: 10px;">
-                    <option value="">Tüm Fakülteler</option>
-                    @foreach (var f in fakulteler)
-                    {
-                        <option value="@f" selected="@(selFakulte == f ? "selected" : null)">@f</option>
-                    }
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small fw-bold text-white-50">Bölüm / Program Filtresi</label>
-                <select name="bolum" class="form-select border-0 shadow-sm" style="height: 45px; border-radius: 10px;">
-                    <option value="">Tüm Bölümler</option>
-                    @foreach (var b in bolumler)
-                    {
-                        <option value="@b" selected="@(selBolum == b ? "selected" : null)">@b</option>
-                    }
-                </select>
-            </div>
-            <div class="col-md-4 d-flex gap-2">
-                <button type="submit" class="btn btn-warning fw-bold flex-grow-1" style="height: 45px; border-radius: 10px; color: #003366;">
-                    <i class="bi bi-funnel-fill me-2"></i>Analizi Güncelle
-                </button>
-                @if (!string.IsNullOrEmpty(selFakulte) || !string.IsNullOrEmpty(selBolum))
+<!-- ── FİLTRE ÇUBUĞU ── -->
+<div class="filter-bar mb-4 no-print">
+    <form method="get" class="row g-3 align-items-end">
+        <input type="hidden" name="id" value="@Model.SurveyId" />
+        <div class="col-sm-4">
+            <label class="form-label small fw-semibold text-white-50 mb-1">Fakülte</label>
+            <select name="fakulte" class="form-select form-select-sm border-0 rounded-3">
+                <option value="">Tümü</option>
+                @foreach (var f in fakulteler)
                 {
-                    <a href="@Url.Action("Results", new { id = Model.SurveyId })" class="btn btn-outline-light" style="height: 45px; width: 45px; border-radius: 10px;">
-                        <i class="bi bi-x-lg"></i>
-                    </a>
+                    <option value="@f" selected="@(selFakulte == f ? "selected" : null)">@f</option>
                 }
+            </select>
+        </div>
+        <div class="col-sm-3">
+            <label class="form-label small fw-semibold text-white-50 mb-1">Birim</label>
+            <select name="birim" class="form-select form-select-sm border-0 rounded-3">
+                <option value="">Tümü</option>
+                @foreach (var br in birimler)
+                {
+                    <option value="@br" selected="@(selBirim == br ? "selected" : null)">@br</option>
+                }
+            </select>
+        </div>
+        <div class="col-sm-3">
+            <label class="form-label small fw-semibold text-white-50 mb-1">Bölüm / Program</label>
+            <select name="bolum" class="form-select form-select-sm border-0 rounded-3">
+                <option value="">Tümü</option>
+                @foreach (var b in bolumler)
+                {
+                    <option value="@b" selected="@(selBolum == b ? "selected" : null)">@b</option>
+                }
+            </select>
+        </div>
+        <div class="col-sm-2 d-flex gap-2">
+            <button type="submit" class="btn btn-warning btn-sm fw-bold flex-grow-1">
+                <i class="bi bi-funnel-fill me-1"></i>Filtrele
+            </button>
+            @if (!string.IsNullOrEmpty(selFakulte) || !string.IsNullOrEmpty(selBolum) || !string.IsNullOrEmpty(selBirim))
+            {
+                <a href="@Url.Action("Results", new { id = Model.SurveyId })" class="btn btn-outline-light btn-sm px-2">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+            }
+        </div>
+    </form>
+</div>
+
+@if (totalResp == 0)
+{
+    <div class="res-card p-5 text-center my-5">
+        <i class="bi bi-inbox" style="font-size:4rem;color:#cbd5e1;"></i>
+        <h4 class="mt-4 fw-bold text-muted">Henüz Veri Toplanmadı</h4>
+        <p class="text-muted">Seçili kriterlere uygun yanıt bulunamadı.</p>
+        <a href="@dashboardUrl" class="btn btn-sm text-white mt-2" style="background:var(--blue);">Geri Dön</a>
+    </div>
+}
+else
+{
+    <!-- ── ÖZET KARTLAR ── -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="stat-card" style="background:linear-gradient(135deg,#1d4ed8,#2563eb);">
+                <p class="mb-0 small opacity-75">Toplam Katılımcı</p>
+                <h2 class="fw-bold mb-0">@totalResp</h2>
+                <i class="bi bi-people sico"></i>
             </div>
-        </form>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card" style="background:linear-gradient(135deg,#047857,#10b981);">
+                <p class="mb-0 small opacity-75">Fakülte / Birim</p>
+                <h2 class="fw-bold mb-0">@fItems.Count</h2>
+                <i class="bi bi-building sico"></i>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card" style="background:linear-gradient(135deg,#6d28d9,#9333ea);">
+                <p class="mb-0 small opacity-75">Soru Sayısı</p>
+                <h2 class="fw-bold mb-0">@Model.Questions.Count</h2>
+                <i class="bi bi-patch-question sico"></i>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card" style="background:linear-gradient(135deg,#b45309,#f59e0b); color:#1c1917;">
+                <p class="mb-0 small" style="opacity:.6;">Ort. Memnuniyet</p>
+                <h2 class="fw-bold mb-0">
+                    @if (avgSat > 0) { <text>@avgSat.ToString("N2") <small class="fs-6">/ 5</small></text> }
+                    else { <text>—</text> }
+                </h2>
+                <i class="bi bi-star sico" style="color:rgba(0,0,0,.12);"></i>
+            </div>
+        </div>
     </div>
 
-    @if (Model.TotalResponses == 0)
+    <!-- ── KATILIMCı DAĞILIMI ── -->
+    @if (fItems.Any() || brItems.Any() || boItems.Any())
     {
-        <div class="card result-card p-5 text-center my-5">
-            <div class="py-5">
-                <img src="/img/no-data.svg" alt="No data" style="width: 200px; opacity: 0.5;" onerror="this.src='https://cdn-icons-png.flaticon.com/512/7486/7486744.png'">
-                <h3 class="mt-4 fw-bold text-muted">Henüz Veri Toplanmadı</h3>
-                <p class="text-muted">Bu anket için seçili kriterlerde herhangi bir yanıt bulunamadı.</p>
-                <a href="@dashboardUrl" class="btn btn-primary rounded-pill px-5 mt-3 shadow">Geri Dön</a>
-            </div>
-        </div>
-    }
-    else
-    {
-        <!-- ÖZET İSTATİSTİKLER -->
-        <div class="row g-4 mb-5">
-            <div class="col-md-3">
-                <div class="stat-card bg-primary shadow-lg">
-                    <p class="mb-0 text-white-50">Toplam Yanıt</p>
-                    <h2 class="display-5 fw-bold mb-0">@Model.TotalResponses</h2>
-                    <i class="bi bi-people"></i>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-success shadow-lg">
-                    <p class="mb-0 text-white-50">Farklı Fakülte</p>
-                    <h2 class="display-5 fw-bold mb-0">@fakulteData.Count</h2>
-                    <i class="bi bi-building"></i>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-info shadow-lg">
-                    <p class="mb-0 text-white-50">Farklı Bölüm</p>
-                    <h2 class="display-5 fw-bold mb-0">@bolumData.Count</h2>
-                    <i class="bi bi-diagram-3"></i>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card bg-warning shadow-lg">
-                    <p class="mb-0 text-dark-50" style="color: rgba(0,0,0,0.5)">Genel Memnuniyet</p>
-                    @{
-                        var avgSat = Model.DepartmentResults?.Any() == true ? Model.DepartmentResults.Average(x => x.AverageSatisfaction) : 0;
-                    }
-                    <h2 class="display-5 fw-bold mb-0 text-dark">@avgSat.ToString("N1") <small class="fs-6">/ 5</small></h2>
-                    <i class="bi bi-star"></i>
-                </div>
-            </div>
-        </div>
-
-        <!-- DAĞILIM GRAFİKLERİ -->
-        <div class="row g-4 mb-5">
-            <div class="col-lg-6">
-                <div class="card result-card h-100">
-                    <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
-                        <h5 class="fw-bold mb-0"><i class="bi bi-building text-primary me-2"></i>Fakülte / Birim Dağılımı</h5>
-                        <span class="badge-soft-primary px-3 py-2 rounded-pill small">Sütun Grafiği</span>
-                    </div>
-                    <div class="card-body p-4">
-                        <div class="chart-container">
-                            <canvas id="fakulteBarChart"></canvas>
+        <div class="sec-title mt-3"><i class="bi bi-pie-chart me-2"></i>Katılım Dağılımı</div>
+        <div class="row g-4 mb-4">
+            @if (fItems.Any())
+            {
+                <div class="col-lg-@(brItems.Any() || boItems.Any() ? "6" : "12")">
+                    <div class="res-card p-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="fw-bold small"><i class="bi bi-building me-1" style="color:var(--blue);"></i>Fakülte Dağılımı</span>
+                            <span class="q-chip">@fItems.Count fakülte</span>
                         </div>
+                        <div class="ch300"><canvas id="chFakulte"></canvas></div>
                     </div>
                 </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="card result-card h-100">
-                    <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
-                        <h5 class="fw-bold mb-0"><i class="bi bi-diagram-3 text-success me-2"></i>Bölüm Dağılımı (Top 15)</h5>
-                        <span class="badge-soft-primary px-3 py-2 rounded-pill small">Sütun Grafiği</span>
-                    </div>
-                    <div class="card-body p-4">
-                        <div class="chart-container">
-                            <canvas id="bolumBarChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- SORU ANALİZLERİ -->
-        <h4 class="fw-bold mb-4 mt-5 d-flex align-items-center">
-            <span class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">2</span>
-            Soru Bazlı Detaylı Analizler
-        </h4>
-
-        <div class="row g-4">
-            @foreach (var q in Model.Questions)
+            }
+            @if (brItems.Any())
             {
                 <div class="col-lg-6">
-                    <div class="card result-card h-100">
-                        <div class="card-body p-4">
-                            <div class="d-flex justify-content-between mb-4">
-                                <h6 class="fw-bold text-dark lh-base pe-3">@q.QuestionText</h6>
-                                <span class="badge bg-soft-primary text-primary rounded-pill h-100 py-2 px-3">@q.AnswerCount Yanıt</span>
-                            </div>
-
-                            @if (q.QuestionType == QuestionType.OpenEnded)
-                            {
-                                <div class="bg-light rounded-4 p-3 overflow-auto" style="max-height: 250px; border: 1px dashed #cbd5e1;">
-                                    @foreach (var ans in q.OpenEndedAnswers)
-                                    {
-                                        <div class="p-3 bg-white rounded-3 shadow-sm mb-2 small border-start border-4 border-primary">
-                                            @ans
-                                        </div>
-                                    }
-                                    @if (!q.OpenEndedAnswers.Any())
-                                    {
-                                        <p class="text-center text-muted py-4">Metin yanıtı bulunmuyor.</p>
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="row g-3">
-                                    <div class="col-md-7">
-                                        <div style="height: 220px;">
-                                            <canvas id="chart_@q.QuestionId"></canvas>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-5">
-                                        <div class="vstack gap-3 mt-2">
-                                            @foreach (var opt in q.OptionResults.OrderByDescending(o => o.Count).Take(5))
-                                            {
-                                                <div>
-                                                    <div class="d-flex justify-content-between small fw-bold mb-1 p-1">
-                                                        <span class="text-truncate" style="max-width: 120px;">@opt.OptionText</span>
-                                                        <span>%@opt.Percentage.ToString("N0")</span>
-                                                    </div>
-                                                    <div class="progress">
-                                                        <div class="progress-bar" style="width: @opt.Percentage%; background: linear-gradient(90deg, var(--primary-color), #3b82f6);"></div>
-                                                    </div>
-                                                </div>
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                            }
+                    <div class="res-card p-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="fw-bold small"><i class="bi bi-diagram-2 me-1" style="color:#7c3aed;"></i>Birim Dağılımı</span>
+                            <span class="q-chip" style="background:#f5f3ff;color:#7c3aed;">Top @brItems.Count</span>
                         </div>
+                        <div class="ch300"><canvas id="chBirim"></canvas></div>
+                    </div>
+                </div>
+            }
+            @if (boItems.Any())
+            {
+                <div class="col-lg-6">
+                    <div class="res-card p-4 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="fw-bold small"><i class="bi bi-diagram-3 me-1" style="color:#059669;"></i>Bölüm / Program</span>
+                            <span class="q-chip" style="background:#f0fdf4;color:#059669;">Top @boItems.Count</span>
+                        </div>
+                        <div class="ch300"><canvas id="chBolum"></canvas></div>
                     </div>
                 </div>
             }
         </div>
+    }
 
-        <!-- SON YANITLAR TABLOSU -->
-        <div class="card result-card mt-5 mb-5 overflow-hidden">
-            <div class="card-header bg-white py-4 px-4 border-0">
-                <h5 class="fw-bold mb-0">Katılımcı Kayıtları (Son 15)</h5>
+    <!-- ── LİKERT GENEL BAKIŞ ── -->
+    @if (likertQs.Any())
+    {
+        <div class="sec-title mt-2"><i class="bi bi-bar-chart-line me-2"></i>Likert Soru Ortalamaları</div>
+        <div class="res-card p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="fw-bold small">Tüm Likert sorularının ortalama memnuniyet skoru (1–5)</span>
+                <span class="avg-badge"><i class="bi bi-star-fill me-1"></i>Genel: @avgSat.ToString("N2") / 5</span>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light text-muted small text-uppercase">
+            <div class="ch240"><canvas id="chLikertOverview"></canvas></div>
+        </div>
+    }
+
+    <!-- ── SORU ANALİZLERİ ── -->
+    <div class="sec-title mt-2">
+        <i class="bi bi-question-circle me-2"></i>Soru Bazlı Sonuçlar
+        <span class="badge bg-light text-dark border ms-2 fw-normal small">@Model.Questions.Count soru</span>
+    </div>
+
+    <div class="row g-4 mb-4">
+        @foreach (var q in Model.Questions)
+        {
+            <div class="col-lg-6">
+                <div class="res-card p-4 h-100 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-3 gap-2">
+                        <h6 class="fw-bold lh-base mb-0 text-dark flex-grow-1">@q.QuestionText</h6>
+                        <span class="q-chip flex-shrink-0">@q.AnswerCount yanıt</span>
+                    </div>
+
+                    @if (q.QuestionType == QuestionType.OpenEnded)
+                    {
+                        <div class="flex-grow-1" style="max-height:280px; overflow-y:auto;">
+                            @if (q.OpenEndedAnswers.Any())
+                            {
+                                @foreach (var ans in q.OpenEndedAnswers)
+                                {
+                                    <div class="open-box">@ans</div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-muted small mb-0 text-center py-4">Henüz metin yanıtı yok.</p>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- sütun grafiği -->
+                        <div class="ch240 mb-3">
+                            <canvas id="qBar_@q.QuestionId"></canvas>
+                        </div>
+                        <!-- progress bar özeti -->
+                        <div>
+                            @foreach (var opt in q.OptionResults.OrderByDescending(o => o.Count))
+                            {
+                                <div class="mb-2">
+                                    <div class="d-flex justify-content-between small mb-1">
+                                        <span class="fw-semibold text-truncate pe-2">@opt.OptionText</span>
+                                        <span class="text-muted flex-shrink-0">@opt.Count kişi · %@opt.Percentage.ToString("N0")</span>
+                                    </div>
+                                    <div class="pbar-wrap">
+                                        <div class="pbar-fill" style="width:@opt.Percentage.ToString("N1").Replace(",",".")%;"></div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        @if (q.QuestionType == QuestionType.Likert && q.AverageSatisfaction > 0)
+                        {
+                            <div class="mt-2 pt-2 border-top text-end">
+                                <span class="avg-badge">
+                                    <i class="bi bi-star-fill"></i> Ortalama: @q.AverageSatisfaction.ToString("N2") / 5
+                                </span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- ── KATILIMCILar ── -->
+    @if (Model.Respondents.Any())
+    {
+        <div class="sec-title mt-2"><i class="bi bi-people me-2"></i>Katılımcı Listesi</div>
+        <div class="res-card mb-5 overflow-hidden">
+            <div class="d-flex justify-content-between align-items-center px-4 py-3 border-bottom">
+                <span class="fw-bold small">
+                    <i class="bi bi-people me-1" style="color:var(--blue);"></i>
+                    @Model.Respondents.Count kişi
+                </span>
+                <input type="text" id="respSearch" class="form-control form-control-sm no-print"
+                       style="max-width:240px;" placeholder="Ad, fakülte, bölüm ara…">
+            </div>
+            <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
+                <table class="table table-hover table-sm align-middle mb-0 small" id="respTable">
+                    <thead class="table-light" style="position:sticky;top:0;z-index:1;">
                         <tr>
-                            <th class="ps-4 py-3">Ad Soyad</th>
-                            <th class="py-3">Fakülte / Birim</th>
-                            <th class="py-3">Bölüm / Program</th>
-                            <th class="py-3 pe-4">Tarih</th>
+                            <th class="ps-3">#</th>
+                            <th>Ad Soyad</th>
+                            <th>Fakülte</th>
+                            <th>Birim</th>
+                            <th>Bölüm</th>
+                            <th>Tarih</th>
                         </tr>
                     </thead>
-                    <tbody class="small">
-                        @foreach (var r in Model.Respondents.Take(15))
+                    <tbody>
+                        @{ int rIdx = 1; }
+                        @foreach (var r in Model.Respondents)
                         {
                             <tr>
-                                <td class="ps-4 fw-bold">@(r.UserFullName ?? "Anonim")</td>
-                                <td>@r.FakulteAdi</td>
-                                <td>@r.BolumAdi</td>
-                                <td class="pe-4 text-muted">@r.SubmittedAt.ToTurkeyDateTime()</td>
+                                <td class="ps-3 text-muted">@(rIdx++)</td>
+                                <td class="fw-semibold">@(r.UserFullName ?? "Anonim")</td>
+                                <td>@(r.FakulteAdi ?? "—")</td>
+                                <td>@(r.BirimAdi ?? "—")</td>
+                                <td>@(r.BolumAdi ?? "—")</td>
+                                <td class="text-muted">@r.SubmittedAt.ToTurkeyDateTime()</td>
                             </tr>
                         }
                     </tbody>
@@ -281,108 +360,171 @@
             </div>
         </div>
     }
-</div>
+}
 
 @section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const chartColors = [
-                '#004a99', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', 
-                        @if (Model.TotalResponses > 0)
-            {
-                // Fakülte Grafiği
-                var fLabels = fakulteData.Select(f => f.Label).ToList();
-                var fCounts = fakulteData.Select(f => f.Count).ToList();
-                <text>
-                new Chart(document.getElementById('fakulteBarChart'), {
-                    type: 'bar',
-                    data: {
-                        labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(fLabels)),
-                        datasets: [{
-                            label: 'Kişi Sayısı',
-                            data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(fCounts)),
-                            backgroundColor: '#004a99',
-                            borderRadius: 8
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            y: { beginAtZero: true, grid: { borderDash: [5, 5] } },
-                            x: { grid: { display: false } }
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    var PAL = [
+        '#2563eb','#7c3aed','#059669','#d97706','#dc2626',
+        '#0891b2','#be185d','#065f46','#92400e','#1e40af',
+        '#6d28d9','#047857','#b45309','#991b1b','#0e7490'
+    ];
+
+    function barChart(id, labels, data, horizontal, color) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var bgColors = color
+            ? labels.map(function(_, i){ return color; })
+            : labels.map(function(_, i){ return PAL[i % PAL.length]; });
+        new Chart(el, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Yanıt',
+                    data: data,
+                    backgroundColor: bgColors,
+                    borderRadius: 7,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: horizontal ? 'y' : 'x',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                var total = ctx.dataset.data.reduce(function(a,b){ return a+b; }, 0);
+                                var pct = total > 0 ? Math.round(ctx.parsed.x !== undefined ? ctx.parsed.x/total*100 : ctx.parsed.y/total*100) : 0;
+                                return ' ' + (horizontal ? ctx.parsed.x : ctx.parsed.y) + ' kişi (' + pct + '%)';
+                            }
                         }
                     }
-                });
-                </text>
-
-                // Bölüm Grafiği
-                var bLabels = bolumData.Select(b => b.Label).ToList();
-                var bCounts = bolumData.Select(b => b.Count).ToList();
-                <text>
-                new Chart(document.getElementById('bolumBarChart'), {
-                    type: 'bar',
-                    data: {
-                        labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(bLabels)),
-                        datasets: [{
-                            label: 'Kişi Sayısı',
-                            data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(bCounts)),
-                            backgroundColor: '#10b981',
-                            borderRadius: 8
-                        }]
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(0,0,0,.05)' },
+                        ticks: {
+                            font: { size: 11 },
+                            callback: horizontal ? undefined : function(v) {
+                                var l = this.getLabelForValue(v);
+                                return l && l.length > 14 ? l.substring(0,14)+'…' : l;
+                            }
+                        }
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            y: { beginAtZero: true },
-                            x: { grid: { display: false } }
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: horizontal ? 'rgba(0,0,0,.05)' : 'rgba(0,0,0,.04)' },
+                        ticks: {
+                            font: { size: 11 },
+                            callback: horizontal ? function(v) {
+                                var l = this.getLabelForValue(v);
+                                return l && l.length > 28 ? l.substring(0,28)+'…' : l;
+                            } : undefined
                         }
                     }
-                });
-                </text>
-
-                // Soru Grafikleri
-                @foreach (var q in Model.Questions.Where(x => x.QuestionType != QuestionType.OpenEnded))
-                {
-                    var qLabels = q.OptionResults.Select(o => o.OptionText).ToList();
-                    var qData = q.OptionResults.Select(o => o.Count).ToList();
-                    <text>
-                    new Chart(document.getElementById('chart_@q.QuestionId'), {
-                        type: 'doughnut',
-                        data: {
-                            labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(qLabels)),
-                            datasets: [{
-                                data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(qData)),
-                                backgroundColor: chartColors,
-                                borderWidth: 2,
-                                borderColor: '#fff'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15, font: { size: 10 } } }
-                            },
-                            cutout: '70%'
-                        }
-                    });
-                    </text>
                 }
             }
         });
-    </script>
-}
-  }
+    }
+
+    function horizontalBarBlue(id, labels, data) {
+        barChart(id, labels, data, true, null);
+    }
+
+    // ── Dağılım grafikleri ──
+    @if (fItems.Any())
+    {
+        <text>
+    barChart('chFakulte', @Html.Raw(fLabels), @Html.Raw(fCounts), @(fItems.Count > 4 ? "true" : "false"), null);
+        </text>
+    }
+    @if (brItems.Any())
+    {
+        <text>
+    horizontalBarBlue('chBirim', @Html.Raw(brLabels), @Html.Raw(brCounts));
+        </text>
+    }
+    @if (boItems.Any())
+    {
+        <text>
+    horizontalBarBlue('chBolum', @Html.Raw(boLabels), @Html.Raw(boCounts));
+        </text>
+    }
+
+    // ── Likert genel bakış (yatay bar) ──
+    @if (likertQs.Any())
+    {
+        <text>
+    (function(){
+        var el = document.getElementById('chLikertOverview');
+        if (!el) return;
+        var labels = @Html.Raw(likertLabels);
+        var scores = @Html.Raw(likertScores);
+        var bgColors = scores.map(function(s){
+            if (s >= 4)   return 'rgba(5,150,105,.75)';
+            if (s >= 3)   return 'rgba(37,99,235,.75)';
+            if (s >= 2)   return 'rgba(217,119,6,.75)';
+            return 'rgba(220,38,38,.75)';
+        });
+        new Chart(el, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Ort. Memnuniyet (1–5)',
+                    data: scores,
+                    backgroundColor: bgColors,
+                    borderRadius: 7,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(ctx){ return ' ' + ctx.parsed.x.toFixed(2) + ' / 5'; } } }
+                },
+                scales: {
+                    x: { beginAtZero: true, max: 5, grid: { color: 'rgba(0,0,0,.05)' },
+                         ticks: { stepSize: 1 } },
+                    y: { ticks: { font: { size: 11 } } }
+                }
             }
         });
-    </script>
-}
-          }
+    })();
+        </text>
+    }
+
+    // ── Soru sütun grafikleri ──
+    @foreach (var q in Model.Questions.Where(x => x.QuestionType != QuestionType.OpenEnded))
+    {
+        var qLabels = JsonSerializer.Serialize(q.OptionResults.Select(o => o.OptionText).ToList(), opts);
+        var qCounts = JsonSerializer.Serialize(q.OptionResults.Select(o => o.Count).ToList(), opts);
+        <text>
+    barChart('qBar_@q.QuestionId', @Html.Raw(qLabels), @Html.Raw(qCounts), false, null);
+        </text>
+    }
+
+    // ── Katılımcı arama ──
+    var si = document.getElementById('respSearch');
+    if (si) {
+        si.addEventListener('input', function () {
+            var f = this.value.toLowerCase();
+            document.querySelectorAll('#respTable tbody tr').forEach(function(r) {
+                r.style.display = r.textContent.toLowerCase().includes(f) ? '' : 'none';
+            });
         });
-    </script>
+    }
+});
+</script>
 }

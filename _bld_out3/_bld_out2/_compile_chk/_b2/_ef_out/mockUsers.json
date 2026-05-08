@@ -1,0 +1,112 @@
+[
+  {
+    "Username": "admin_teknoloji",
+    "Password": "123sel\u00E7uk",
+    "UserId": "mock_admin_01",
+    "FullName": "Teknoloji Admin Test",
+    "Role": "Admin",
+    "UserTypeId": 0,
+    "PersonelBirim": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "JobRecordType": "Akademik",
+    "FakulteAdi": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "BolumAdi": "",
+    "AuthorizedUnits": [
+      "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130"
+    ]
+  },
+  {
+    "Username": "ogrenci_bilgisayar",
+    "Password": "123sel\u00E7uk",
+    "UserId": "mock_ogr_01",
+    "FullName": "Bilgisayar \u00D6\u011Frencisi Test",
+    "Role": "Student",
+    "UserTypeId": 1,
+    "PersonelBirim": "",
+    "JobRecordType": "",
+    "FakulteAdi": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "BolumAdi": "B\u0130LG\u0130SAYAR M\u00DCHEND\u0130SL\u0130\u011E\u0130",
+    "AuthorizedUnits": null
+  },
+  {
+    "Username": "ogrenci_elektrik",
+    "Password": "123sel\u00E7uk",
+    "UserId": "mock_ogr_02",
+    "FullName": "Elektrik \u00D6\u011Frencisi Test",
+    "Role": "Student",
+    "UserTypeId": 1,
+    "PersonelBirim": "",
+    "JobRecordType": "",
+    "FakulteAdi": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "BolumAdi": "ELEKTR\u0130K ELEKTRON\u0130K M\u00DCHEND\u0130SL\u0130\u011E\u0130",
+    "AuthorizedUnits": null
+  },
+  {
+    "Username": "ogrenci_akademik",
+    "Password": "123sel\u00E7uk",
+    "UserId": "mock_ogr_03",
+    "FullName": "Akademik Fak\u00FClte \u00D6\u011Frencisi",
+    "Role": "Student",
+    "UserTypeId": 1,
+    "PersonelBirim": "",
+    "JobRecordType": "",
+    "FakulteAdi": "AKADEM\u0130K FAK\u00DCLTE",
+    "BolumAdi": "\u00D6rnek B\u00F6l\u00FCm",
+    "AuthorizedUnits": null
+  },
+  {
+    "Username": "akademik_bilgisayar",
+    "Password": "123sel\u00E7uk",
+    "UserId": "mock_acad_01",
+    "FullName": "Bilgisayar Akademik Test",
+    "Role": "Akademik",
+    "UserTypeId": 0,
+    "PersonelBirim": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "JobRecordType": "Akademik",
+    "FakulteAdi": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "BolumAdi": "B\u0130LG\u0130SAYAR M\u00DCHEND\u0130SL\u0130\u011E\u0130",
+    "AuthorizedUnits": null
+  },
+  {
+    "Username": "akademik_elektrik",
+    "Password": "123sel\u00E7uk",
+    "UserId": "mock_acad_02",
+    "FullName": "Elektrik Akademik Test",
+    "Role": "Akademik",
+    "UserTypeId": 0,
+    "PersonelBirim": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "JobRecordType": "Akademik",
+    "FakulteAdi": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "BolumAdi": "ELEKTR\u0130K ELEKTRON\u0130K M\u00DCHEND\u0130SL\u0130\u011E\u0130",
+    "AuthorizedUnits": null
+  },
+  {
+    "Username": "admin_elektrik",
+    "Password": "123sel\u00E7uk",
+    "UserId": "mock_admin_02",
+    "FullName": "Elektrik Admin Test",
+    "Role": "Admin",
+    "UserTypeId": 0,
+    "PersonelBirim": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "JobRecordType": "Akademik",
+    "FakulteAdi": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "BolumAdi": "ELEKTR\u0130K ELEKTRON\u0130K M\u00DCHEND\u0130SL\u0130\u011E\u0130",
+    "AuthorizedUnits": [
+      "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130"
+    ]
+  },
+  {
+    "Username": "admin_bilgisayar",
+    "Password": "123sel\u00E7uk",
+    "UserId": "mock_admin_02",
+    "FullName": "Bilgisayar Admin Test",
+    "Role": "Admin",
+    "UserTypeId": 0,
+    "PersonelBirim": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "JobRecordType": "Akademik",
+    "FakulteAdi": "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130",
+    "BolumAdi": "B\u0130LG\u0130SAYAR M\u00DCHEND\u0130SL\u0130\u011E\u0130",
+    "AuthorizedUnits": [
+      "TEKNOLOJ\u0130 FAK\u00DCLTES\u0130"
+    ]
+  }
+]

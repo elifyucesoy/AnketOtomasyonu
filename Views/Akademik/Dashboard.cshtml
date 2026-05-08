@@ -48,8 +48,10 @@
                                       <span class="badge bg-secondary">Herkes</span>
                                     } else {
                                         if (s.TargetRoles.Contains("Student")) { <span class="badge bg-primary">Öğrenci</span> }
-                                        if (s.TargetRoles.Contains("Employee")) { <span class="badge bg-success">Personel</span> }
+                                        if (s.TargetRoles.Contains("Personel") || s.TargetRoles.Contains("Idari") || s.TargetRoles.Contains("Employee")) { <span class="badge bg-success">Personel</span> }
+                                        if (s.TargetRoles.Contains("Akademik")) { <span class="badge bg-info text-dark">Akademik</span> }
                                         if (s.TargetRoles.Contains("Admin")) { <span class="badge bg-dark">Admin</span> }
+                                        if (s.TargetRoles.Contains("SuperAdmin")) { <span class="badge bg-danger">Süper Admin</span> }
                                     }
                                     @if(s.IsAnonymous)
                                     {

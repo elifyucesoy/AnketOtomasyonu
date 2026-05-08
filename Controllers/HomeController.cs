@@ -15,11 +15,16 @@ namespace AnketOtomasyonu.Controllers
     {
         private readonly ISurveyService _surveyService;
         private readonly ISurveyResponseService _responseService;
+        private readonly IUnitApiService _unitApiService;
 
-        public HomeController(ISurveyService surveyService, ISurveyResponseService responseService)
+        public HomeController(
+            ISurveyService surveyService,
+            ISurveyResponseService responseService,
+            IUnitApiService unitApiService)
         {
             _surveyService = surveyService;
             _responseService = responseService;
+            _unitApiService = unitApiService;
         }
 
         public async Task<IActionResult> Index()
@@ -30,36 +35,47 @@ namespace AnketOtomasyonu.Controllers
 
             var allSummaries = await _surveyService.GetAllSurveySummariesAsync();
 
-            // Çoklu ANKET_*: Admin + İdari + Akademik vb. birlikte — geniş katalog / birim filtresi birleşik uygulanır
             IEnumerable<SurveySummaryDto> filteredSurveys;
-            if (isAuth && User.HasStaffSurveyExtendedCatalogAccess(userRole))
+            if (isAuth && User.HasStaffSurveyExtendedCatalogAccess())
             {
                 filteredSurveys = allSummaries;
             }
             else
             {
-                filteredSurveys = allSummaries.Where(s => s.Status == SurveyStatus.Active);
+                filteredSurveys = allSummaries.Where(s =>
+                    s.Status == SurveyStatus.Active
+                    && s.ApprovalStatus == ApprovalStatus.Approved);
             }
 
-            var surveys = filteredSurveys.AsEnumerable();
+            var filteredSurveyList = filteredSurveys.ToList();
+            var targetUnitMap = await _surveyService.GetTargetUnitNamesBySurveyIdsAsync(
+                filteredSurveyList.Select(s => s.Id).ToList());
+
+            var surveys = filteredSurveyList.AsEnumerable();
 
             if (isAuth)
             {
-                if (User.HasSuperAdminAccess())
+                if (User.HasAnketPermission(AnketPermissions.SuperAdmin))
                 {
-                    // SuperAdmin her şeyi görür
+                    // ANKET_API_SUPER_ADMIN: katalogda kısıt yok
                 }
-                else if (User.HasAnyStaffSurveyPermission() || AnketPermissionClaims.IsStaffSurveyRole(userRole))
+                else if (User.HasAnyStaffSurveyPermission())
                 {
-                    // Personel izinlerinden herhangi biri veya Admin/Akademik/Employee rolü: birim + MERKEZ + aktif
+                    // Liste: kendi birim anahtarları (AuthorizedUnits ile başka birimin anketi görünmez)
                     surveys = surveys.Where(s =>
-                        s.Status == SurveyStatus.Active ||
                         string.Equals(s.CreatedByBirim, "MERKEZ", StringComparison.OrdinalIgnoreCase) ||
-                        SurveyUnitMatchHelper.MatchesSurveySummary(User, s));
+                        SurveyUnitMatchHelper.MatchesSurveySummary(User, s, targetUnitMap, includeAuthorizedUnits: false));
                 }
                 else
                 {
-                    // Öğrenci vb.: Fill’de detaylı kontrol; listede yalnızca aktif set (yukarıda)
+                    surveys = surveys.Where(s =>
+                        SurveyUnitMatchHelper.MatchesSurveySummary(User, s, targetUnitMap, includeAuthorizedUnits: false));
+                }
+
+                if (!User.HasAnketPermission(AnketPermissions.SuperAdmin))
+                {
+                    surveys = surveys.Where(s =>
+                        SurveyTargetRoleHelper.TargetRolesAllowUser(s.TargetRoles, User));
                 }
             }
             else
@@ -68,18 +84,15 @@ namespace AnketOtomasyonu.Controllers
             }
 
             var surveyRows = surveys.ToList();
-            var targetUnitMap = await _surveyService.GetTargetUnitNamesBySurveyIdsAsync(
-                surveyRows.Select(s => s.Id).ToList());
 
             var vm = new SurveyIndexViewModel
             {
                 UserFullName = User.FindFirstValue(ClaimTypes.Name),
                 UserRole = User.FindFirstValue(ClaimTypes.Role),
                 IsLoggedIn = User.Identity?.IsAuthenticated == true,
-                CanUseStaffSurveyTools = User.HasSuperAdminAccess()
-                    || User.HasAnketPermission(AnketPermissions.Admin)
-                    || userRole == "SuperAdmin" || userRole == "Admin",
-                PreferSuperAdminSurveyLinks = hasSuperClaim || userRole == "SuperAdmin",
+                CanUseStaffSurveyTools = User.HasAnketPermission(AnketPermissions.SuperAdmin)
+                    || User.HasAnketPermission(AnketPermissions.Admin),
+                PreferSuperAdminSurveyLinks = hasSuperClaim,
                 Surveys = surveyRows.Select(s => new SurveyListItemViewModel
                 {
                     Id = s.Id,
@@ -124,23 +137,57 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> Results(int id)
         {
-            var userRole = User.FindFirstValue(ClaimTypes.Role);
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
             if (survey == null) return NotFound();
 
-            // Birim eşleşmesi + Admin / Akademik / İdari izinlerinden herhangi biri (çoklu yetki birleşimi)
-            bool unitMatches = SurveyUnitMatchHelper.MatchesSurveyBirimStrings(User, survey.CreatedByBirim, survey.TargetFaculties);
+            // Birim eşleşmesi: SurveyResponse ile aynı — UnitId için API adı + yetkili birim claim’leri sonuçta kullanılmaz
+            string? fromUnitList = null;
+            var accessToken = User.FindFirstValue("AccessToken");
+            if (survey.UnitId.HasValue && survey.UnitId.Value > 0)
+            {
+                var unitDto = await _unitApiService.GetUnitByIdAsync(survey.UnitId.Value, accessToken);
+                fromUnitList = unitDto?.Name;
+            }
 
-            bool canView = User.HasSuperAdminAccess()
+            var targetCsv = SurveyFillAccessHelper.BuildAccessCsv(survey, fromUnitList);
+            bool unitMatches = SurveyUnitMatchHelper.MatchesSurveyBirimStrings(
+                User,
+                survey.CreatedByBirim,
+                targetCsv,
+                null,
+                includeAuthorizedUnits: false);
+
+            // Saf akademik: sonuç ekranı = akademik dashboard ile aynı kural (geniş unitMatches tek başına yetmez)
+            bool birimUygun = unitMatches;
+            if (User.HasAnketPermission(AnketPermissions.Akademik)
+                && !User.HasAnketPermission(AnketPermissions.Admin)
+                && !User.HasAnketPermission(AnketPermissions.SuperAdmin))
+            {
+                var deptScope = await AkademikDepartmentScopeHelper.TryResolveAsync(User, _unitApiService, accessToken, null);
+                if (deptScope.Resolved && (deptScope.UnitIds.Count > 0 || deptScope.NormalizedNames.Count > 0))
+                {
+                    if (AkademikDepartmentScopeHelper.SurveyHasNoUnitTargeting(survey))
+                        birimUygun = false;
+                    else
+                        birimUygun = AkademikDepartmentScopeHelper.SurveyMatchesDepartmentScope(survey, fromUnitList, deptScope);
+                }
+                else
+                    birimUygun = AkademikDepartmentScopeHelper.SurveyMatchesAkademikClaimsFallback(survey, fromUnitList, User);
+            }
+
+            bool canView = User.HasAnketPermission(AnketPermissions.SuperAdmin)
                 || survey.CreatedByUserId == userId
-                || (unitMatches && User.HasAnySurveyResultsStaffCapability(userRole));
+                || (birimUygun && User.HasAnySurveyResultsStaffCapability());
 
             if (!canView) return Unauthorized();
 
             var results = await _responseService.GetSurveyResultsAsync(id);
             ViewBag.SurveyId = id;
+            var opts = await _responseService.GetRespondentFilterOptionsAsync(id);
+            ViewBag.Bolumler = opts.Bolumler;
+            ViewBag.Birimler = opts.Birimler;
             return View("~/Views/Admin/Results.cshtml", results);
         }
     }

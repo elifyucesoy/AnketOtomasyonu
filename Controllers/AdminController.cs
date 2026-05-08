@@ -1,5 +1,6 @@
 using AnketOtomasyonu.Authorization;
 using AnketOtomasyonu.Data;
+using AnketOtomasyonu.Helpers;
 using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
@@ -12,7 +13,7 @@ using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
 {
-    [Authorize(Policy = "ANKET_API_ADMIN")]
+    [Authorize(Policy = AnketPermissions.PolicyAdminArea)]
     public class AdminController : Controller
     {
         private readonly ISurveyService _surveyService;
@@ -37,58 +38,46 @@ namespace AnketOtomasyonu.Controllers
 
         // Çoklu yetki sistemi kaldırıldı (isteğe bağlı olarak sadeleştirildi)
 
-        private async Task<bool> CheckOwnershipAsync(int surveyId)
-        {
-            if (User.HasSuperAdminAccess()) return true;
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var ownerId = await _db.Surveys.AsNoTracking()
-                .Where(s => s.Id == surveyId)
-                .Select(s => s.CreatedByUserId)
-                .FirstOrDefaultAsync();
-            return ownerId != null && ownerId == userId;
-        }
-
-        /// <summary>Sil / yayın / kapat sonrası: süper admin SuperAdmin panosuna, diğerleri Admin panosuna.</summary>
-        private IActionResult RedirectToManagingDashboard()
-        {
-            if (User.HasSuperAdminAccess())
-                return RedirectToAction("Dashboard", "SuperAdmin");
-            return RedirectToAction("Dashboard");
-        }
-
         /// <summary>
-        /// «Tüm birimler» (<c>__ALL__</c>) POST’ta sunucuda genişletilir: SuperAdmin için <c>null</c> (CachedUnits),
-        /// normal Admin için yetkili birim adları.
+        /// Birim yöneticisi: yalnız yetkili birim adlarıyla örtüşen anketler; detay için
+        /// <see cref="ISurveyService.IsSurveyInAdminUnitScopeAsync"/>. SuperAdmin bu controller’ı kullanmaz.
         /// </summary>
-        private IReadOnlyList<string>? GetExpandAllTargetScopeForCurrentUser()
-        {
-            if (User.HasSuperAdminAccess())
-                return null;
+        private Task<bool> CanAccessSurveyInAdminPanelAsync(int surveyId) =>
+            _surveyService.IsSurveyInAdminUnitScopeAsync(
+                surveyId,
+                AdminUnitScopeHelper.GetAuthorizedUnitNames(User));
 
-            var trCulture = new CultureInfo("tr-TR");
-            var units = User.FindAll("AuthorizedUnits")
-                .Select(c => c.Value)
-                .GroupBy(x => x.ToUpper(trCulture))
-                .Select(g => g.First())
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToList();
-            if (units.Count == 0)
-            {
-                var birim = User.FindFirstValue("PersonelBirim");
-                if (!string.IsNullOrEmpty(birim)) units.Add(birim);
-            }
-            return units;
+        private IActionResult RedirectToManagingDashboard() => RedirectToAction("Dashboard");
+
+        private IActionResult RedirectAccessDeniedToDashboard()
+        {
+            TempData["Error"] = "Bu ankete atanmış birim kapsamınız dahilinde değilsiniz.";
+            return RedirectToManagingDashboard();
         }
 
-        /// <summary>CreateSurvey / EditSurvey formları için ortak birim listesi ve yetkili birimler.</summary>
+        private IActionResult RedirectNotOwnerToDashboard()
+        {
+            TempData["Error"] = "Bu anketi yalnızca oluşturan yönetici düzenleyebilir, silebilir veya yayınlayabilir. Siz aynı birimde yalnızca görüntüleme ve sonuçlara erişebilirsiniz.";
+            return RedirectToManagingDashboard();
+        }
+
+        private string? CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        private Task<bool> IsCurrentUserSurveyOwnerAsync(int surveyId) =>
+            _surveyService.IsSurveyCreatedByUserAsync(surveyId, CurrentUserId);
+
+        /// <summary>«Tüm birimler» (<c>__ALL__</c>) yalnızca yetkili birim listesine genişler.</summary>
+        private IReadOnlyList<string> GetExpandAllTargetScopeForCurrentUser() =>
+            AdminUnitScopeHelper.GetAuthorizedUnitNames(User);
+
+        /// <summary>CreateSurvey / EditSurvey — yalnızca PersonelBirim + AuthorizedUnits kapsamı.</summary>
         private async Task HydrateSurveyCreateFormAsync(SurveyCreateViewModel model)
         {
-            var trCulture = new CultureInfo("tr-TR");
-            var isSuperAdmin = User.HasSuperAdminAccess();
-
             ViewBag.AllBirimler = _birimService.GetAllNames();
 
+            model.AuthorizedUnits = AdminUnitScopeHelper.GetAuthorizedUnitNames(User);
+
+            var scopeSet = new HashSet<string>(model.AuthorizedUnits, StringComparer.OrdinalIgnoreCase);
             var dbUnits = await _db.CachedUnits
                 .Where(u => u.IsActive && !string.IsNullOrEmpty(u.Name))
                 .OrderBy(u => u.Name)
@@ -109,84 +98,106 @@ namespace AnketOtomasyonu.Controllers
                     .ToList();
             }
 
-            if (dbUnits.Count == 0 && isSuperAdmin)
-            {
-                dbUnits = _birimService.GetAll()
-                    .Select(b => new Models.Entities.CachedUnit
-                    {
-                        Id = b.Id,
-                        Name = b.Name,
-                        ParentId = null,
-                        UnitTypeId = null,
-                        UnitTypeName = null,
-                        IsActive = true,
-                        LastSyncedAt = DateTime.UtcNow
-                    })
-                    .OrderBy(u => u.Name)
-                    .ToList();
-            }
-
-            ViewBag.UnitList = dbUnits;
-
-            if (isSuperAdmin)
-            {
-                model.AuthorizedUnits = dbUnits.Select(u => u.Name).ToList();
-            }
-            else
-            {
-                model.AuthorizedUnits = User.FindAll("AuthorizedUnits")
-                    .Select(c => c.Value)
-                    .GroupBy(x => x.ToUpper(trCulture))
-                    .Select(g => g.First())
-                    .ToList();
-
-                if (!model.AuthorizedUnits.Any())
-                {
-                    var birim = User.FindFirstValue("PersonelBirim");
-                    if (!string.IsNullOrEmpty(birim)) model.AuthorizedUnits.Add(birim);
-                }
-            }
+            ViewBag.UnitList = dbUnits
+                .Where(u => scopeSet.Contains(u.Name.Trim()))
+                .ToList();
+            ViewBag.FormController = "Admin";
         }
 
         [HttpGet]
-        public async Task<IActionResult> Dashboard(string? birim = null)
+        public async Task<IActionResult> Dashboard(
+            string? birim = null,
+            string? statusFilter = null,
+            string? startDate = null,
+            string? endDate = null,
+            string dateSort = "newest",
+            int page = 1)
         {
-            if (User.HasSuperAdminAccess())
-                return RedirectToAction("Dashboard", "SuperAdmin");
+            var currentUserId = CurrentUserId ?? "";
+            var authorizedUnits = AdminUnitScopeHelper.GetAuthorizedUnitNames(User);
+            var all = (await _surveyService.GetSurveySummariesForAdminUnitScopeAsync(authorizedUnits)).ToList();
 
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0";
-            
-            // Kullanıcının yetkili olduğu tüm birimler (claim'den)
-            var authorizedUnits = User.FindAll("AuthorizedUnits").Select(c => c.Value).Distinct().ToList();
-            if (!authorizedUnits.Any())
+            // Birim filtresi — oluşturan birimi, yayın birimi veya SurveyBirim hedefleri
+            IReadOnlyList<SurveySummaryDto> birimFiltered;
+            if (string.IsNullOrEmpty(birim))
+                birimFiltered = all;
+            else
             {
-                var userBirim = User.FindFirstValue("PersonelBirim");
-                if (!string.IsNullOrEmpty(userBirim)) authorizedUnits.Add(userBirim);
+                var birimNorm = birim.Trim();
+                var targetMap = await _surveyService.GetTargetUnitNamesBySurveyIdsAsync(all.Select(x => x.Id).ToList());
+                birimFiltered = all.Where(s =>
+                    string.Equals(s.CreatedByBirim?.Trim(), birimNorm, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(s.UnitName?.Trim(), birimNorm, StringComparison.OrdinalIgnoreCase)
+                    || (targetMap.TryGetValue(s.Id, out var tg)
+                        && tg.Any(t => string.Equals(t.Trim(), birimNorm, StringComparison.OrdinalIgnoreCase))))
+                    .ToList();
             }
 
-            var all = (await _surveyService.GetSurveySummariesByCreatorAsync(userId)).ToList();
+            // Stat sayıları (birim filtresi sonrası, durum filtresi öncesi)
+            var totalSurveys     = birimFiltered.Count;
+            var activeSurveys    = birimFiltered.Count(s => s.Status == SurveyStatus.Active);
+            var draftSurveys     = birimFiltered.Count(s => s.Status == SurveyStatus.Draft);
+            var passiveSurveys   = birimFiltered.Count(s => s.Status == SurveyStatus.Inactive);
+            var pendingCount     = birimFiltered.Count(s => s.ApprovalStatus == ApprovalStatus.Pending);
+            var rejectedCount    = birimFiltered.Count(s => s.ApprovalStatus == ApprovalStatus.Rejected);
+            var totalResponses   = birimFiltered.Sum(s => s.ResponseCount);
 
-            // Seçili birim filtresi varsa uygula
-            var filtered = all;
-            if (!string.IsNullOrEmpty(birim))
+            // Durum / onay filtresi
+            var filtered = birimFiltered.AsEnumerable();
+            filtered = statusFilter switch
             {
-                filtered = all.Where(s => string.Equals(s.CreatedByBirim, birim, StringComparison.CurrentCultureIgnoreCase)).ToList();
-            }
+                "active"   => filtered.Where(s => s.Status == SurveyStatus.Active),
+                "draft"    => filtered.Where(s => s.Status == SurveyStatus.Draft),
+                "passive"  => filtered.Where(s => s.Status == SurveyStatus.Inactive),
+                "pending"  => filtered.Where(s => s.ApprovalStatus == ApprovalStatus.Pending),
+                "rejected" => filtered.Where(s => s.ApprovalStatus == ApprovalStatus.Rejected),
+                _          => filtered
+            };
+
+            // Tarih aralığı filtresi
+            DateTime? start = null, end = null;
+            if (DateTime.TryParse(startDate, out var sd)) { start = sd.Date; filtered = filtered.Where(s => s.CreatedAt.Date >= start.Value); }
+            if (DateTime.TryParse(endDate,   out var ed)) { end   = ed.Date; filtered = filtered.Where(s => s.CreatedAt.Date <= end.Value);   }
+
+            // Sıralama
+            filtered = dateSort == "oldest"
+                ? filtered.OrderBy(s => s.CreatedAt)
+                : filtered.OrderByDescending(s => s.CreatedAt);
+
+            var list = filtered.ToList();
+
+            // Sayfalama
+            const int pageSize = 25;
+            page = Math.Max(1, page);
+            var totalCount = list.Count;
+            var paged = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
             var vm = new AdminDashboardViewModel
             {
-                TotalSurveys = filtered.Count,
-                ActiveSurveys = filtered.Count(s => s.Status == SurveyStatus.Active),
-                DraftSurveys = filtered.Count(s => s.Status == SurveyStatus.Draft),
-                TotalResponses = filtered.Sum(s => s.ResponseCount),
-                TotalUsers = 0,
-                AuthorizedUnits = authorizedUnits,
-                SelectedBirim = birim,
-                RecentSurveys = filtered.OrderByDescending(s => s.CreatedAt).Take(50).Select(s => new SurveyListItemViewModel
+                TotalSurveys         = totalSurveys,
+                ActiveSurveys        = activeSurveys,
+                DraftSurveys         = draftSurveys,
+                PassiveSurveys       = passiveSurveys,
+                PendingApprovalCount = pendingCount,
+                RejectedCount        = rejectedCount,
+                TotalResponses       = totalResponses,
+                TotalUsers           = 0,
+                AuthorizedUnits      = authorizedUnits,
+                SelectedBirim        = birim,
+                SurveyStatusFilter   = statusFilter,
+                StartDateStr         = startDate,
+                EndDateStr           = endDate,
+                DateSort             = dateSort,
+                CurrentPage          = page,
+                TotalCount           = totalCount,
+                PageSize             = pageSize,
+                RecentSurveys = paged.Select(s => new SurveyListItemViewModel
                 {
                     Id = s.Id,
                     Title = s.Title,
                     IsAnonymous = s.IsAnonymous,
+                    IsCreatedByCurrentUser = !string.IsNullOrEmpty(currentUserId)
+                        && string.Equals(s.CreatedByUserId, currentUserId, StringComparison.Ordinal),
                     Status = s.Status switch
                     {
                         SurveyStatus.Active   => "Aktif",
@@ -220,6 +231,7 @@ namespace AnketOtomasyonu.Controllers
         {
             var model = new SurveyCreateViewModel();
             await HydrateSurveyCreateFormAsync(model);
+            ViewBag.SelectedRoles = new List<string> { "Student" };
             return View(model);
         }
 
@@ -268,6 +280,7 @@ namespace AnketOtomasyonu.Controllers
                     var ub = User.FindFirstValue("PersonelBirim");
                     if (!string.IsNullOrEmpty(ub)) errorModel.AuthorizedUnits.Add(ub);
                 }
+                ViewBag.FormController = "Admin";
                 TempData["Error"] = "Anket başlığı zorunludur.";
                 return View(errorModel);
             }
@@ -289,9 +302,9 @@ namespace AnketOtomasyonu.Controllers
                 ? dto.CreatedByBirim
                 : (User.FindFirstValue("PersonelBirim") ?? "MERKEZ");
 
-            var isSuperAdmin = User.HasSuperAdminAccess();
+            // Birim yöneticisi: onay bekler. Otomatik onaylı taslak yalnızca /SuperAdmin/CreateSurvey.
             var expandScope = GetExpandAllTargetScopeForCurrentUser();
-            await _surveyService.CreateSurveyAsync(dto, createdById, createdByName, createdByBirim, isSuperAdmin, expandScope);
+            await _surveyService.CreateSurveyAsync(dto, createdById, createdByName, createdByBirim, isSuperAdmin: false, expandScope);
 
             TempData["Success"] = "Anket başarıyla oluşturuldu. Yayınlamak için Yayınla butonuna tıklayın.";
             return RedirectToManagingDashboard();
@@ -301,12 +314,22 @@ namespace AnketOtomasyonu.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Publish(int id)
         {
-            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+            if (!await CanAccessSurveyInAdminPanelAsync(id)) return RedirectAccessDeniedToDashboard();
+            if (!await IsCurrentUserSurveyOwnerAsync(id)) return RedirectNotOwnerToDashboard();
 
-            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+            var approvalRow = await _db.Surveys.AsNoTracking()
+                .Where(s => s.Id == id)
+                .Select(s => new { s.ApprovalStatus })
+                .FirstOrDefaultAsync();
+
+            if (approvalRow == null)
+            {
+                TempData["Error"] = "Anket bulunamadı.";
+                return RedirectToManagingDashboard();
+            }
 
             // SuperAdmin doğrudan yayınlayabilir; Admin için onay şart
-            if (!User.HasSuperAdminAccess() && survey?.ApprovalStatus != Models.Entities.ApprovalStatus.Approved)
+            if (!User.HasSuperAdminAccess() && approvalRow.ApprovalStatus != ApprovalStatus.Approved)
             {
                 TempData["Error"] = "Bu anket henüz SuperAdmin tarafından onaylanmadı. Onaylanmadan yayınlanamaz.";
                 return RedirectToManagingDashboard();
@@ -321,7 +344,8 @@ namespace AnketOtomasyonu.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Close(int id)
         {
-            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+            if (!await CanAccessSurveyInAdminPanelAsync(id)) return RedirectAccessDeniedToDashboard();
+            if (!await IsCurrentUserSurveyOwnerAsync(id)) return RedirectNotOwnerToDashboard();
 
             await _surveyService.CloseSurveyAsync(id);
             TempData["Success"] = "Anket kapatıldı.";
@@ -331,7 +355,8 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> EditSurvey(int id)
         {
-            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+            if (!await CanAccessSurveyInAdminPanelAsync(id)) return RedirectAccessDeniedToDashboard();
+            if (!await IsCurrentUserSurveyOwnerAsync(id)) return RedirectNotOwnerToDashboard();
 
             var survey = await _surveyService.GetSurveyForEditAsync(id);
             if (survey == null)
@@ -400,7 +425,8 @@ namespace AnketOtomasyonu.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditSurvey(int id, SurveyCreateDto dto)
         {
-            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+            if (!await CanAccessSurveyInAdminPanelAsync(id)) return RedirectAccessDeniedToDashboard();
+            if (!await IsCurrentUserSurveyOwnerAsync(id)) return RedirectNotOwnerToDashboard();
 
             // CreateSurvey ile aynı: ModelState / örtük soru doğrulamasına güvenme (yanlış pozitifleri önler).
             dto.Questions = dto.Questions?
@@ -435,11 +461,21 @@ namespace AnketOtomasyonu.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Republish(int id)
         {
-            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+            if (!await CanAccessSurveyInAdminPanelAsync(id)) return RedirectAccessDeniedToDashboard();
+            if (!await IsCurrentUserSurveyOwnerAsync(id)) return RedirectNotOwnerToDashboard();
 
-            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+            var approvalRow = await _db.Surveys.AsNoTracking()
+                .Where(s => s.Id == id)
+                .Select(s => new { s.ApprovalStatus })
+                .FirstOrDefaultAsync();
 
-            if (!User.HasSuperAdminAccess() && survey?.ApprovalStatus != Models.Entities.ApprovalStatus.Approved)
+            if (approvalRow == null)
+            {
+                TempData["Error"] = "Anket bulunamadı.";
+                return RedirectToManagingDashboard();
+            }
+
+            if (!User.HasSuperAdminAccess() && approvalRow.ApprovalStatus != ApprovalStatus.Approved)
             {
                 TempData["Error"] = "Bu anket henüz SuperAdmin tarafından onaylanmadı.";
                 return RedirectToManagingDashboard();
@@ -453,36 +489,31 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> PreviewSurvey(int id)
         {
-            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+            if (!await CanAccessSurveyInAdminPanelAsync(id)) return RedirectAccessDeniedToDashboard();
 
             var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
             if (survey == null) return NotFound();
 
+            ViewBag.CanManageSurvey = await IsCurrentUserSurveyOwnerAsync(id);
             return View(survey);
         }
 
         [HttpGet]
-        public async Task<IActionResult> Results(int id, string? fakulte = null, string? bolum = null)
+        public async Task<IActionResult> Results(int id, string? fakulte = null, string? bolum = null, string? birim = null)
         {
-            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+            if (!await CanAccessSurveyInAdminPanelAsync(id)) return RedirectAccessDeniedToDashboard();
 
-            var results = await _responseService.GetSurveyResultsAsync(id, fakulte, bolum);
-            
-            // Filtre dropdownları için listeleri hazırla
-            // Tüm fakülteleri BirimService'den alıyoruz
+            var results = await _responseService.GetSurveyResultsAsync(id, fakulte, bolum, birim);
+
             ViewBag.Fakulteler = _birimService.GetAllNames();
-            
-            // Bölümleri ise bu ankete gelen cevaplardan (tüm cevaplardan) çekiyoruz ki filtre anlamlı olsun
-            var allResultsForUnits = await _responseService.GetSurveyResultsAsync(id); 
-            ViewBag.Bolumler = allResultsForUnits.Respondents
-                .Where(r => !string.IsNullOrEmpty(r.BolumAdi))
-                .Select(r => r.BolumAdi)
-                .Distinct()
-                .OrderBy(b => b)
-                .ToList();
+
+            var opts = await _responseService.GetRespondentFilterOptionsAsync(id);
+            ViewBag.Bolumler = opts.Bolumler;
+            ViewBag.Birimler = opts.Birimler;
 
             ViewBag.SelectedFakulte = fakulte;
             ViewBag.SelectedBolum = bolum;
+            ViewBag.SelectedBirim = birim;
 
             return View(results);
         }
@@ -491,7 +522,16 @@ namespace AnketOtomasyonu.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id)
         {
-            if (!await CheckOwnershipAsync(id)) return Unauthorized();
+            // Silinmiş ankete ikinci POST (çift tıklama, yavaş ağ) Unauthorized yerine yönlendir — aksi halde 401 görünür.
+            var stillThere = await _db.Surveys.AsNoTracking().AnyAsync(x => x.Id == id);
+            if (!stillThere)
+            {
+                TempData["Error"] = "Anket bulunamadı veya zaten silindi.";
+                return RedirectToManagingDashboard();
+            }
+
+            if (!await CanAccessSurveyInAdminPanelAsync(id)) return RedirectAccessDeniedToDashboard();
+            if (!await IsCurrentUserSurveyOwnerAsync(id)) return RedirectNotOwnerToDashboard();
 
             await _surveyService.DeleteSurveyAsync(id);
             TempData["Success"] = "Anket silindi.";

@@ -1,4 +1,5 @@
 using AnketOtomasyonu.Data;
+using AnketOtomasyonu.Helpers;
 using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -117,6 +118,33 @@ namespace AnketOtomasyonu.Services.Implementations
             return all.Where(u => ids.Contains(u.Id)).ToList();
         }
 
+        /// <inheritdoc />
+        public async Task<List<UnitDto>> ResolveProfileUnitIdsAsync(IEnumerable<int> unitIds, string? userAccessToken = null)
+        {
+            var orderedIds = unitIds?
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList() ?? new List<int>();
+            if (orderedIds.Count == 0)
+                return new List<UnitDto>();
+
+            var fromBulk = await GetUnitsByIdsAsync(orderedIds, userAccessToken);
+            var found = fromBulk.Select(u => u.Id).ToHashSet();
+
+            var result = new List<UnitDto>(fromBulk);
+            foreach (var id in orderedIds)
+            {
+                if (found.Contains(id))
+                    continue;
+
+                var one = await GetUnitByIdAsync(id, userAccessToken);
+                if (one != null && found.Add(one.Id))
+                    result.Add(one);
+            }
+
+            return result;
+        }
+
         public async Task<List<string>> GetAllUnitNamesAsync(string? bearerToken = null)
         {
             var units = await GetAllUnitsAsync(bearerToken);
@@ -202,6 +230,108 @@ namespace AnketOtomasyonu.Services.Implementations
             // Adım 3: parentId ile üst birimi getir
             _logger.LogInformation("[UnitApiService] UnitId={Id} → parentId={Pid}", unitId, unit.ParentId);
             return await GetUnitByIdAsync(unit.ParentId.Value, bearerToken);
+        }
+
+        /// <inheritdoc />
+        public async Task<UnitSubtreeScan?> GetUnitAllChildrenSubtreeAsync(int unitId, string? bearerToken = null)
+        {
+            try
+            {
+                var token = bearerToken ?? await GetServiceTokenAsync();
+                if (string.IsNullOrEmpty(token))
+                {
+                    _logger.LogWarning("[UnitApiService] GetUnitAllChildrenSubtreeAsync: token yok, Id={Id}", unitId);
+                    return null;
+                }
+
+                var baseUrl = GetBaseUrl();
+                var path = (_configuration["ApiServices:UnitAllChildByIdPath"] ?? "/api/v1/Unit/UnitAllChildById").TrimStart('/');
+                var client = _httpClientFactory.CreateClient();
+                var auth = token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? token : $"Bearer {token}";
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", auth);
+
+                var url = $"{baseUrl}/{path}?id={unitId}";
+                var resp = await client.GetAsync(url);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("[UnitApiService] UnitAllChildById HTTP {S} Id={Id}", resp.StatusCode, unitId);
+                    return null;
+                }
+
+                var raw = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(raw);
+                var root = UnwrapValueOrData(doc.RootElement);
+                var scan = new UnitSubtreeScan();
+                WalkUnitSubtreeJson(root, scan);
+                if (scan.AllIds.Count == 0)
+                {
+                    _logger.LogWarning("[UnitApiService] UnitAllChildById boş ağaç Id={Id}", unitId);
+                    return null;
+                }
+
+                _logger.LogInformation("[UnitApiService] UnitAllChildById Id={Id} → {N} düğüm", unitId, scan.AllIds.Count);
+                return scan;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[UnitApiService] GetUnitAllChildrenSubtreeAsync hata Id={Id}", unitId);
+                return null;
+            }
+        }
+
+        private static JsonElement UnwrapValueOrData(JsonElement root)
+        {
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("value", out var v))
+                    return v;
+                if (root.TryGetProperty("data", out var d))
+                    return d;
+            }
+
+            return root;
+        }
+
+        private static void WalkUnitSubtreeJson(JsonElement el, UnitSubtreeScan scan)
+        {
+            switch (el.ValueKind)
+            {
+                case JsonValueKind.Object:
+                {
+                    if (el.TryGetProperty("id", out var idEl) &&
+                        idEl.ValueKind == JsonValueKind.Number &&
+                        idEl.TryGetInt32(out var id) &&
+                        id > 0)
+                    {
+                        scan.AllIds.Add(id);
+                        if (el.TryGetProperty("name", out var nameEl) &&
+                            nameEl.ValueKind == JsonValueKind.String)
+                        {
+                            var name = nameEl.GetString();
+                            if (!string.IsNullOrWhiteSpace(name))
+                                scan.IdToNormalizedName[id] = SurveyUnitMatchHelper.NormalizeBirim(name);
+                        }
+                    }
+
+                    if (el.TryGetProperty("childIds", out var cids) &&
+                        cids.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var x in cids.EnumerateArray())
+                        {
+                            if (x.ValueKind == JsonValueKind.Number && x.TryGetInt32(out var cid) && cid > 0)
+                                scan.AllIds.Add(cid);
+                        }
+                    }
+
+                    foreach (var p in el.EnumerateObject())
+                        WalkUnitSubtreeJson(p.Value, scan);
+                    break;
+                }
+                case JsonValueKind.Array:
+                    foreach (var item in el.EnumerateArray())
+                        WalkUnitSubtreeJson(item, scan);
+                    break;
+            }
         }
 
         public async Task<(int unitCount, int unitTypeCount)> ForceRefreshAsync(string bearerToken)

@@ -1,4 +1,4 @@
-﻿using AnketOtomasyonu.Models.Entities;
+using AnketOtomasyonu.Models.Entities;
 
 namespace AnketOtomasyonu.Models.ViewModels
 {
@@ -11,6 +11,8 @@ namespace AnketOtomasyonu.Models.ViewModels
         public string Status { get; set; } = string.Empty;
         public string StatusBadgeClass { get; set; } = string.Empty;
         public string CreatedByName { get; set; } = string.Empty;
+        /// <summary>Yayınla vb. — yalnızca oluşturan admin.</summary>
+        public bool CanManageSurvey { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }

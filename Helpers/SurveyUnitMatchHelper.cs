@@ -4,8 +4,10 @@ using AnketOtomasyonu.Models.DTOs;
 namespace AnketOtomasyonu.Helpers
 {
     /// <summary>
-    /// GetProfile / çoklu birim: kullanıcıda hangi ANKET_* izinleri olursa olsun, cookie’deki <b>tüm</b> birim
-    /// anahtarlarından biri anketi tanımlayan birimle örtüşürse erişim (tek PersonelBirim ile sınırlı değil).
+    /// Birim eşleşmesi: cookie’deki birim anahtarları ile anket hedef birimleri.
+    /// Anket <b>doldurma</b> ve katılımcı listelerinde <c>includeAuthorizedUnits: false</c> kullanın —
+    /// yönetici olarak yetkili olunan başka birimler anketi açmasın.
+    /// Sonuç ekranında varsayılan <c>true</c> (yetkili birimlerde sonuç görebilme).
     /// </summary>
     public static class SurveyUnitMatchHelper
     {
@@ -16,9 +18,9 @@ namespace AnketOtomasyonu.Helpers
         }
 
         /// <summary>
-        /// Tüm <c>UnitName</c> claim’leri, PersonelBirim, FakulteAdi, AuthorizedUnits — normalize edilmiş küme.
+        /// <paramref name="includeAuthorizedUnits"/>: false = yalnız gerçek profil/katalog birimi (anket doldurma).
         /// </summary>
-        public static HashSet<string> GetNormalizedBirimKeys(ClaimsPrincipal user)
+        public static HashSet<string> GetNormalizedBirimKeys(ClaimsPrincipal user, bool includeAuthorizedUnits = true)
         {
             var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -34,22 +36,39 @@ namespace AnketOtomasyonu.Helpers
 
             Add(user.FindFirstValue("PersonelBirim"));
             Add(user.FindFirstValue("FakulteAdi"));
+            Add(user.FindFirstValue("BolumAdi"));
 
-            foreach (var c in user.FindAll("AuthorizedUnits"))
-                Add(c.Value);
+            if (includeAuthorizedUnits)
+            {
+                foreach (var c in user.FindAll("AuthorizedUnits"))
+                    Add(c.Value);
+            }
 
             return keys;
         }
 
-        /// <summary>
-        /// Anketin CreatedByBirim / TargetFaculties ile kullanıcının herhangi bir birimi eşleşiyor mu?
-        /// </summary>
-        public static bool MatchesSurveyBirimStrings(ClaimsPrincipal user, string? createdByBirim, string? targetFaculties)
-        {
-            if (NormalizeBirim(createdByBirim) == "MERKEZ")
-                return true;
+        public static bool MatchesSurveyBirimStrings(ClaimsPrincipal user, string? createdByBirim, string? targetFaculties) =>
+            MatchesSurveyBirimStrings(user, createdByBirim, targetFaculties, null, true);
 
-            var userKeys = GetNormalizedBirimKeys(user);
+        public static bool MatchesSurveyBirimStrings(
+            ClaimsPrincipal user,
+            string? createdByBirim,
+            string? targetFaculties,
+            HashSet<string>? additionalNormalizedKeys,
+            bool includeAuthorizedUnits = true)
+        {
+            // MERKEZ oluşturucu: herkese serbest geçiş verilmez; hedef birim listesi veya UnitId zinciri eşleşmelidir.
+
+            var userKeys = GetNormalizedBirimKeys(user, includeAuthorizedUnits);
+            if (additionalNormalizedKeys != null)
+            {
+                foreach (var k in additionalNormalizedKeys)
+                {
+                    if (!string.IsNullOrEmpty(k))
+                        userKeys.Add(k);
+                }
+            }
+
             if (userKeys.Count == 0)
                 return false;
 
@@ -70,7 +89,50 @@ namespace AnketOtomasyonu.Helpers
             return false;
         }
 
-        public static bool MatchesSurveySummary(ClaimsPrincipal user, SurveySummaryDto s) =>
-            MatchesSurveyBirimStrings(user, s.CreatedByBirim, s.TargetFaculties);
+        public static string? MergeSummaryTargetCsv(
+            SurveySummaryDto s,
+            IReadOnlyDictionary<int, List<string>>? surveyBirimBySurveyId = null)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddCsv(string? csv)
+            {
+                if (string.IsNullOrWhiteSpace(csv)) return;
+                foreach (var p in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var t = p.Trim();
+                    if (t.Length > 0) set.Add(t);
+                }
+            }
+
+            AddCsv(s.TargetFaculties);
+            if (!string.IsNullOrWhiteSpace(s.UnitName))
+                set.Add(s.UnitName.Trim());
+
+            if (surveyBirimBySurveyId != null &&
+                surveyBirimBySurveyId.TryGetValue(s.Id, out var rows))
+            {
+                foreach (var b in rows)
+                {
+                    if (!string.IsNullOrWhiteSpace(b))
+                        set.Add(b.Trim());
+                }
+            }
+
+            return set.Count > 0
+                ? string.Join(",", set.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                : null;
+        }
+
+        public static bool MatchesSurveySummary(
+            ClaimsPrincipal user,
+            SurveySummaryDto s,
+            IReadOnlyDictionary<int, List<string>>? surveyBirimBySurveyId = null,
+            bool includeAuthorizedUnits = true) =>
+            MatchesSurveyBirimStrings(
+                user,
+                s.CreatedByBirim,
+                MergeSummaryTargetCsv(s, surveyBirimBySurveyId),
+                null,
+                includeAuthorizedUnits);
     }
 }

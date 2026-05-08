@@ -3,6 +3,11 @@
 @using AnketOtomasyonu.Models.Entities
 @model SurveyCreateViewModel
 @{
+    var formController = ViewBag.FormController as string ?? "Admin";
+    if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+    {
+        Layout = "~/Views/Shared/_SuperAdminLayout.cshtml";
+    }
     var editSurveyId = ViewBag.SurveyId as int?;
     bool isEdit = editSurveyId.HasValue;
     ViewData["Title"] = isEdit ? "Anketi Düzenle" : "Yeni Anket Oluştur";
@@ -16,21 +21,24 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
+        @{
+            var accentColor = string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase) ? "#7c3aed" : "#2563eb";
+        }
         @if (isEdit)
         {
-            <h2 class="mb-0"><i class="bi bi-pencil-square me-2" style="color:#2563eb;"></i>Anketi Düzenle</h2>
+            <h2 class="mb-0"><i class="bi bi-pencil-square me-2" style="color:@accentColor;"></i>Anketi Düzenle</h2>
             <small class="text-muted">Anket bilgilerini ve soruları güncelleyin</small>
         }
         else
         {
-            <h2 class="mb-0"><i class="bi bi-plus-circle me-2" style="color:#2563eb;"></i>Yeni Anket Oluştur</h2>
+            <h2 class="mb-0"><i class="bi bi-plus-circle me-2" style="color:@accentColor;"></i>Yeni Anket Oluştur</h2>
             <small class="text-muted">Sorularınızı ekleyin ve anketi kaydedin</small>
         }
     </div>
     <div class="d-flex gap-2 align-items-center flex-wrap">
         @if (isEdit && surveyStatus.HasValue && (surveyStatus == SurveyStatus.Closed || surveyStatus == SurveyStatus.Inactive || surveyStatus == SurveyStatus.Draft))
         {
-            <form asp-action="Republish" asp-route-id="@editSurveyId" method="post" class="d-inline">
+            <form asp-controller="@formController" asp-action="Republish" asp-route-id="@editSurveyId" method="post" class="d-inline">
                 @Html.AntiForgeryToken()
                 <button type="submit" class="btn btn-success btn-sm"
                         onclick="return confirm('Anket tekrar yayınlansın mı?')">
@@ -38,13 +46,13 @@
                 </button>
             </form>
         }
-        @if (User.HasSuperAdminAccess())
+        @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
         {
             <a asp-controller="SuperAdmin" asp-action="Dashboard" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Geri</a>
         }
         else
         {
-            <a asp-action="Dashboard" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Geri</a>
+            <a asp-controller="Admin" asp-action="Dashboard" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Geri</a>
         }
     </div>
 </div>
@@ -57,13 +65,13 @@
     </div>
 }
 
-<form action="@(isEdit ? Url.Action("EditSurvey", new { id = editSurveyId }) : Url.Action("CreateSurvey"))"
+<form action="@(isEdit ? Url.Action("EditSurvey", formController, new { id = editSurveyId }) : Url.Action("CreateSurvey", formController))"
       method="post" id="createSurveyForm">
     @Html.AntiForgeryToken()
 
     <!-- ANKET BİLGİLERİ -->
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header py-3" style="background: linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%);">
+        <div class="card-header py-3 cs-card-header-primary">
             <h5 class="mb-0 text-white"><i class="bi bi-info-circle me-2"></i>Anket Bilgileri</h5>
         </div>
         <div class="card-body">
@@ -88,13 +96,17 @@
 
                 <!-- HEDEF ROLLER -->
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold"><i class="bi bi-people me-1" style="color:#2563eb;"></i>Hedef Roller</label>
-                    <small class="text-muted d-block mb-2">Akademik kadro ≈ ANKET_API_AKADEMIK; Personel ve İdari hedefleri ANKET_IDARI personeli ile uyumludur.</small>
+                    <label class="form-label fw-semibold"><i class="bi bi-people me-1" style="color:@accentColor;"></i>Hedef Roller</label>
+                    <small class="text-muted d-block mb-2">
+                        Uzakta <strong>5 ANKET izin kodu</strong> vardır; kullanıcıya bunların <strong>alt kümesi</strong> (ör. 2 veya 3 kod) atanır.
+                        Burada işaretlediğiniz hedef rollerden <strong>biri</strong>, oturumda <strong>olan</strong> kodlarla örtüşürse katılım mümkün (çoklu izin = birden fazla etiket uyumu).
+                        <strong>Personel</strong>: uzak sistemde <strong>ANKET_IDARI</strong> (idari personel). <strong>Birim</strong> ayrı kontrol.
+                    </small>
                     <div class="d-flex gap-3 mt-1 flex-wrap">
                         @foreach (var role in Model.AvailableRoles)
                         {
-                            var displayLabel = role == "Employee" ? "Personel" : role == "Student" ? "Öğrenci" : role == "Akademik" ? "Akademik" : role == "Idari" ? "İdari" : role;
-                            var roleIcon = role == "Student" ? "bi-mortarboard" : role == "Akademik" ? "bi-journal-text" : role == "Idari" ? "bi-building-gear" : "bi-briefcase";
+                            var displayLabel = role == "Employee" || role == "Idari" ? "Personel" : role == "Student" ? "Öğrenci" : role == "Akademik" ? "Akademik" : role == "Admin" ? "Admin" : role == "SuperAdmin" ? "Süper Admin" : role;
+                            var roleIcon = role == "Student" ? "bi-mortarboard" : role == "Akademik" ? "bi-journal-text" : role == "Personel" || role == "Idari" || role == "Employee" ? "bi-building-gear" : role == "Admin" ? "bi-shield-check" : role == "SuperAdmin" ? "bi-stars" : "bi-briefcase";
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" name="TargetRoles" value="@role" id="role_@role"
                                        @(selectedRoles.Contains(role) ? "checked" : null) />
@@ -108,7 +120,7 @@
 
                 <!-- ANONİM -->
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold"><i class="bi bi-shield-check me-1" style="color:#7c3aed;"></i>Gizlilik</label>
+                    <label class="form-label fw-semibold"><i class="bi bi-shield-check me-1" style="color:@accentColor;"></i>Gizlilik</label>
                     <div class="form-check mt-1 p-3 rounded" style="background:#f5f3ff; border:1px solid #ede9fe;">
                         <input asp-for="IsAnonymous" class="form-check-input" />
                         <label asp-for="IsAnonymous" class="form-check-label fw-semibold">Anonim Anket</label>
@@ -119,15 +131,15 @@
                 <!-- BİRİM SEÇİMİ -->
                 @{
                     var unitListVb = ViewBag.UnitList as List<AnketOtomasyonu.Models.Entities.CachedUnit>;
-                    bool isSuperAdmin = User.HasSuperAdminAccess();
+                    bool useSuperAdminUnitUi = string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
                     bool hasDbUnits = unitListVb != null && unitListVb.Count > 0;
                 }
 
-                @if (isSuperAdmin && hasDbUnits)
+                @if (useSuperAdminUnitUi && hasDbUnits)
                 {
                     <div class="col-12">
                         <label class="form-label fw-semibold">
-                            <i class="bi bi-building me-1" style="color:#2563eb;"></i>Hedef birimler <span class="text-danger">*</span>
+                            <i class="bi bi-building me-1" style="color:@accentColor;"></i>Hedef birimler <span class="text-danger">*</span>
                         </label>
                         <small class="text-muted d-block mb-2">Birden fazla seçebilirsiniz. «Tüm birimler» seçildiğinde forma yalnızca tek bir işaret gönderilir; tam birim listesi sunucuda üretilir (istek boyutu sınırına takılmaz). Tek birimde anket o birime bağlanır; çoklu / tümünde oluşturan birim <strong>MERKEZ</strong>.</small>
                         <select id="superAdminUnitSelect" name="TargetFaculties" multiple="multiple" class="form-select select2-unit-multi" style="width:100%;">
@@ -135,6 +147,16 @@
                             @foreach (var u in unitListVb!)
                             {
                                 <option value="@u.Name" data-unit-id="@u.Id">@u.Name</option>
+                            }
+                            @{
+                                /* Düzenleme modunda SurveyBirim'de kayıtlı olup CachedUnit'te bulunmayan
+                                   birimleri de ekle — yoksa Select2 .val() bunları seçemiyor. */
+                                var _preselected = ViewBag.SelectedTargetFaculties as List<string> ?? new List<string>();
+                                var _cachedNames = new HashSet<string>(unitListVb!.Select(u => u.Name), StringComparer.OrdinalIgnoreCase);
+                                foreach (var _m in _preselected.Where(n => !string.IsNullOrWhiteSpace(n) && n != "__ALL__" && !_cachedNames.Contains(n)))
+                                {
+                                    <option value="@_m">@_m</option>
+                                }
                             }
                         </select>
                         <div class="d-flex flex-wrap gap-2 mt-2">
@@ -146,10 +168,10 @@
                         <input type="hidden" name="UnitName" id="hiddenUnitName" value="" autocomplete="off" />
                     </div>
                 }
-                else if (!isSuperAdmin && Model.AuthorizedUnits != null && Model.AuthorizedUnits.Count > 1)
+                else if (!useSuperAdminUnitUi && Model.AuthorizedUnits != null && Model.AuthorizedUnits.Count > 1)
                 {
                     <div class="col-12">
-                        <label class="form-label fw-semibold"><i class="bi bi-building me-1" style="color:#2563eb;"></i>Hedef birimler <span class="text-danger">*</span></label>
+                        <label class="form-label fw-semibold"><i class="bi bi-building me-1" style="color:@accentColor;"></i>Hedef birimler <span class="text-danger">*</span></label>
                         <small class="text-muted d-block mb-2">Yetkili birimlerinizden seçin. «Tüm birimler» seçildiğinde forma tek işaret gider; yetkili birimleriniz sunucuda tam listelenir.</small>
                         <select id="adminMultiUnitSelect" name="TargetFaculties" multiple="multiple" class="form-select select2-admin-units" style="width:100%;">
                             <option value="__ALL__">Tüm birimler</option>
@@ -170,7 +192,7 @@
                 else
                 {
                     <div class="col-12">
-                        <label class="form-label fw-semibold"><i class="bi bi-building me-1" style="color:#2563eb;"></i>Anketi yayınlayan birim <span class="text-danger">*</span></label>
+                        <label class="form-label fw-semibold"><i class="bi bi-building me-1" style="color:@accentColor;"></i>Anketi yayınlayan birim <span class="text-danger">*</span></label>
                         <select name="CreatedByBirim" id="createdByBirim" class="form-select">
                             @if (Model.AuthorizedUnits != null && Model.AuthorizedUnits.Any())
                             {
@@ -195,7 +217,7 @@
 
     <!-- SORULAR -->
     <div class="card border-0 shadow-sm mb-3" id="questionsCard">
-        <div class="card-header py-3" style="background: linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);">
+        <div class="card-header py-3 cs-card-header-secondary">
             <h5 class="mb-0 text-white"><i class="bi bi-question-circle me-2"></i>Sorular</h5>
         </div>
         <div class="card-body" id="questionsContainer">
@@ -233,15 +255,23 @@
     <style>
         .select2-container--bootstrap-5 .select2-selection { border-radius: 0.375rem; }
 
+        /* ── Soru kartları ── */
         .question-card .card-header {
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-            border-bottom: 2px solid #bae6fd;
+            @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+            {
+                @:background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+                @:border-bottom: 2px solid #c4b5fd;
+            }
+            else
+            {
+                @:background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+                @:border-bottom: 2px solid #bfdbfe;
+            }
         }
         .question-card {
-            border: 1px solid #bae6fd !important;
             transition: box-shadow .2s;
         }
-        .question-card:hover { box-shadow: 0 4px 14px rgba(14,165,233,.15) !important; }
+        .question-card:hover { box-shadow: 0 4px 14px rgba(37,99,235,.12) !important; }
 
         .options-area {
             background: #f8fafc;
@@ -249,13 +279,32 @@
             padding: 1rem;
             border: 1px dashed #94a3b8;
         }
-        #btnAddQuestion {
-            border-style: dashed;
-            font-weight: 600;
-            letter-spacing: .02em;
+
+        @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+        {
+            @:#btnAddQuestion { border-style:dashed;font-weight:600;letter-spacing:.02em;color:#7c3aed;border-color:#7c3aed; }
+            @:#btnAddQuestion:hover { background:#f5f3ff;color:#7c3aed; }
+            @:.question-card { border-color: #c4b5fd !important; }
         }
-        #btnAddQuestion:hover {
-            background: #eff6ff;
+        else
+        {
+            @:#btnAddQuestion { border-style:dashed;font-weight:600;letter-spacing:.02em;color:#2563eb;border-color:#2563eb; }
+            @:#btnAddQuestion:hover { background:#eff6ff;color:#2563eb; }
+            @:.question-card { border-color: #bfdbfe !important; }
+        }
+
+        @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+        {
+            @:/* ── SuperAdmin renk teması (mor) ── */
+            @:.cs-card-header-primary { background: linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%); }
+            @:.cs-card-header-secondary { background: linear-gradient(135deg,#9333ea 0%,#7c3aed 100%); }
+            @:.btn-outline-primary { color: #7c3aed !important; border-color: #7c3aed !important; }
+            @:.btn-outline-primary:hover { background: #7c3aed !important; border-color: #7c3aed !important; color: #fff !important; }
+        }
+        else
+        {
+            @:.cs-card-header-primary { background: linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%); }
+            @:.cs-card-header-secondary { background: linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%); }
         }
     </style>
 }

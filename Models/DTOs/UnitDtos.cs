@@ -2,6 +2,15 @@ using System.Text.Json.Serialization;
 
 namespace AnketOtomasyonu.Models.DTOs
 {
+    /// <summary>UnitAllChildById API yanıtından çıkarılan id ve normalize ad kümesi.</summary>
+    public sealed class UnitSubtreeScan
+    {
+        public HashSet<int> AllIds { get; } = new();
+
+        /// <summary>Normalize (tr-TR büyük harf) bölüm/birim adı.</summary>
+        public Dictionary<int, string> IdToNormalizedName { get; } = new();
+    }
+
     // ─── UnitList API Response ────────────────────────────────────────────────────
 
     public class UnitListResponse
@@ -65,14 +74,40 @@ namespace AnketOtomasyonu.Models.DTOs
         [JsonPropertyName("id")]
         public int Id { get; set; }
 
+        [JsonPropertyName("unitId")]
+        public int UnitId { get; set; }
+
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
 
         [JsonPropertyName("code")]
         public string? Code { get; set; }
 
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+
+        [JsonPropertyName("unitType")]
+        public string? UnitType { get; set; }
+
         [JsonPropertyName("isActive")]
         public bool IsActive { get; set; }
+
+        [JsonIgnore]
+        public string DisplayName
+        {
+            get
+            {
+                var n = Name?.Trim();
+                if (!string.IsNullOrEmpty(n)) return n;
+                return (Title ?? "").Trim();
+            }
+        }
+
+        [JsonIgnore]
+        public string TypeDiscriminator => (Type ?? UnitType ?? "").Trim();
     }
 
     // ─── Kullanıcının birim özeti (claims'e yazılır) ──────────────────────────────

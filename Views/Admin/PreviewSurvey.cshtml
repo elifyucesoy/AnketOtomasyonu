@@ -74,6 +74,13 @@
     }
 </div>
 
+@if (ViewBag.CanManageSurvey is bool canM && !canM)
+{
+    <div class="alert alert-info border-0 shadow-sm mb-3" role="alert">
+        <i class="bi bi-info-circle me-2"></i>Bu anketi yalnızca oluşturan yönetici düzenleyebilir veya silebilir. Siz aynı birimde önizleme ve sonuçları görüntüleyebilirsiniz.
+    </div>
+}
+
 <!-- Hero -->
 <div class="preview-hero">
     <h2>@Model.Title</h2>

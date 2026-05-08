@@ -63,12 +63,88 @@ namespace AnketOtomasyonu.Services.Implementations
                 .ToListAsync();
         }
 
+        public async Task<IReadOnlyList<SurveySummaryDto>> GetSurveySummariesForAdminUnitScopeAsync(
+            IReadOnlyList<string> authorizedUnitNames)
+        {
+            var units = authorizedUnitNames?
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(u => u.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList() ?? new List<string>();
+            if (units.Count == 0)
+                return Array.Empty<SurveySummaryDto>();
+
+            var surveyIdsFromTargets = await _context.SurveyBirimler.AsNoTracking()
+                .Where(sb => units.Contains(sb.Birim.Trim()))
+                .Select(sb => sb.SurveyId)
+                .Distinct()
+                .ToListAsync();
+
+            return await SurveySummariesQuery(
+                    _context.Surveys.AsNoTracking()
+                        .Where(s =>
+                            (s.CreatedByBirim != null && units.Contains(s.CreatedByBirim.Trim()))
+                            || (s.UnitName != null && units.Contains(s.UnitName.Trim()))
+                            || surveyIdsFromTargets.Contains(s.Id)))
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<bool> IsSurveyInAdminUnitScopeAsync(
+            int surveyId,
+            IReadOnlyList<string> authorizedUnitNames)
+        {
+            var scope = authorizedUnitNames?
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(u => u.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList() ?? new List<string>();
+            if (scope.Count == 0)
+                return false;
+
+            var scopeSet = new HashSet<string>(scope, StringComparer.OrdinalIgnoreCase);
+
+            var s = await _context.Surveys.AsNoTracking()
+                .Where(x => x.Id == surveyId)
+                .Select(x => new { x.CreatedByBirim, x.UnitName })
+                .FirstOrDefaultAsync();
+            if (s == null)
+                return false;
+
+            bool InScope(string? b) =>
+                !string.IsNullOrWhiteSpace(b) && scopeSet.Contains(b.Trim());
+
+            if (InScope(s.CreatedByBirim) || InScope(s.UnitName))
+                return true;
+
+            var targetNames = await _context.SurveyBirimler.AsNoTracking()
+                .Where(sb => sb.SurveyId == surveyId)
+                .Select(sb => sb.Birim)
+                .ToListAsync();
+            return targetNames.Any(InScope);
+        }
+
+        public async Task<bool> IsSurveyCreatedByUserAsync(int surveyId, string? userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+                return false;
+
+            var creator = await _context.Surveys.AsNoTracking()
+                .Where(s => s.Id == surveyId)
+                .Select(s => s.CreatedByUserId)
+                .FirstOrDefaultAsync();
+
+            return !string.IsNullOrEmpty(creator)
+                && string.Equals(creator, userId, StringComparison.Ordinal);
+        }
+
         public async Task<IReadOnlyList<SurveySummaryDto>> GetActiveAnonymousSurveySummariesAsync()
         {
             var now = DateTime.Now;
             return await SurveySummariesQuery(
                     _context.Surveys.AsNoTracking()
                         .Where(s => s.Status == SurveyStatus.Active
+                            && s.ApprovalStatus == ApprovalStatus.Approved
                             && s.IsAnonymous
                             && (s.StartDate == null || s.StartDate <= now)
                             && (s.EndDate == null || s.EndDate >= now)))
@@ -128,9 +204,8 @@ namespace AnketOtomasyonu.Services.Implementations
 
         public async Task<IEnumerable<Survey>> GetActiveSurveysAsync()
         {
-            // Debug: Şimdilik tarih kısıtlamasını kaldıralım, sadece Status=Active olanları çekelim
             return await _context.Surveys
-                .Where(s => s.Status == SurveyStatus.Active)
+                .Where(s => s.Status == SurveyStatus.Active && s.ApprovalStatus == ApprovalStatus.Approved)
                 .Include(s => s.Questions)
                 .Include(s => s.Responses)
                 .Include(s => s.TargetUnits)
@@ -143,6 +218,7 @@ namespace AnketOtomasyonu.Services.Implementations
             var now = DateTime.Now;
             return await _context.Surveys
                 .Where(s => s.Status == SurveyStatus.Active
+                    && s.ApprovalStatus == ApprovalStatus.Approved
                     && s.IsAnonymous
                     && (s.StartDate == null || s.StartDate <= now)
                     && (s.EndDate == null || s.EndDate >= now))
@@ -260,13 +336,18 @@ namespace AnketOtomasyonu.Services.Implementations
                 CreatedAt = DateTime.UtcNow
             };
 
-            // TargetUnits set up based on TargetFaculties
+            // TargetUnits: çoklu seçim + yalnızca birim dropdown (UnitName) — öğrenci metin eşlemesi için SurveyBirim satırı
             if (dto.TargetFaculties != null && dto.TargetFaculties.Any())
             {
                 foreach (var b in dto.TargetFaculties)
                 {
                     survey.TargetUnits.Add(new SurveyBirim { Birim = b.Trim() });
                 }
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.UnitName)
+                     && !survey.TargetUnits.Any(t => string.Equals(t.Birim.Trim(), dto.UnitName.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                survey.TargetUnits.Add(new SurveyBirim { Birim = dto.UnitName.Trim() });
             }
 
             int order = 1;
@@ -374,12 +455,17 @@ namespace AnketOtomasyonu.Services.Implementations
             survey.UpdatedAt = DateTime.UtcNow;
 
             _context.SurveyBirimler.RemoveRange(survey.TargetUnits);
+            survey.TargetUnits.Clear();
             if (dto.TargetFaculties != null && dto.TargetFaculties.Any())
             {
                 foreach (var b in dto.TargetFaculties)
                 {
                     survey.TargetUnits.Add(new SurveyBirim { Birim = b.Trim() });
                 }
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.UnitName))
+            {
+                survey.TargetUnits.Add(new SurveyBirim { Birim = dto.UnitName.Trim() });
             }
 
             // Admin düzenlemesi → onaya gönder (Taslak + Pending)

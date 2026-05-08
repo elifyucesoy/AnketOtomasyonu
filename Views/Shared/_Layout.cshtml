@@ -94,12 +94,11 @@
                 </button>
 
                 @{
-                    var _navRole     = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "";
                     var _navLoggedIn = User.Identity?.IsAuthenticated ?? false;
                     var _navName     = User.Identity?.Name ?? "";
-                    var _navSuper    = User.HasAnketPermission(AnketPermissions.SuperAdmin) || _navRole == "SuperAdmin";
-                    var _navAdmin    = (User.HasAnketPermission(AnketPermissions.Admin) || _navRole == "Admin") && !_navSuper;
-                    var _navAkademik = User.HasAnketPermission(AnketPermissions.Akademik) || _navRole == "Akademik";
+                    var _navSuper    = User.HasAnketPermission(AnketPermissions.SuperAdmin);
+                    var _navAdmin    = User.HasAnketPermission(AnketPermissions.Admin);
+                    var _navAkademik = User.HasAnketPermission(AnketPermissions.Akademik);
                 }
                 <div class="collapse navbar-collapse" id="navbarMain">
                     <ul class="navbar-nav me-auto">
@@ -165,25 +164,25 @@
                                 <a class="nav-link dropdown-toggle" href="#" role="button"
                                    data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="bi bi-person-circle me-1"></i>@_navName
-                                    @if (_navRole == "SuperAdmin")
+                                    @if (User.HasAnketPermission(AnketPermissions.SuperAdmin))
                                     {
                                         <span class="badge ms-1" style="font-size:0.65rem;background:#7c3aed;">SuperAdmin</span>
                                     }
-                                    else if (_navRole == "Admin")
+                                    @if (User.HasAnketPermission(AnketPermissions.Admin))
                                     {
                                         <span class="badge bg-danger ms-1" style="font-size:0.65rem">Admin</span>
                                     }
-                                    else if (_navRole == "Akademik")
+                                    @if (User.HasAnketPermission(AnketPermissions.Akademik))
                                     {
                                         <span class="badge bg-info ms-1" style="font-size:0.65rem">Akademik</span>
                                     }
-                                    else if (_navRole == "Student")
+                                    @if (User.HasAnketPermission(AnketPermissions.Idari))
+                                    {
+                                        <span class="badge bg-success ms-1" style="font-size:0.65rem">İdari</span>
+                                    }
+                                    @if (User.HasAnketPermission(AnketPermissions.Student))
                                     {
                                         <span class="badge bg-primary ms-1" style="font-size:0.65rem">Öğrenci</span>
-                                    }
-                                    else if (_navRole == "Employee")
-                                    {
-                                        <span class="badge bg-success ms-1" style="font-size:0.65rem">Personel</span>
                                     }
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end">

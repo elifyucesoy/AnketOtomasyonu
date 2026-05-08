@@ -1,4 +1,6 @@
-﻿using AnketOtomasyonu.Models.DTOs;
+using AnketOtomasyonu.Authorization;
+using AnketOtomasyonu.Helpers;
+using AnketOtomasyonu.Models.DTOs;
 using AnketOtomasyonu.Models.Entities;
 using AnketOtomasyonu.Models.ViewModels;
 using AnketOtomasyonu.Services.Interfaces;
@@ -8,7 +10,7 @@ using System.Security.Claims;
 
 namespace AnketOtomasyonu.Controllers
 {
-    [Authorize(Policy = "ANKET_API_ADMIN")]
+    [Authorize(Policy = AnketPermissions.PolicyAdminArea)]
     public class SurveyController : Controller
     {
         private readonly ISurveyService _surveyService;
@@ -18,15 +20,17 @@ namespace AnketOtomasyonu.Controllers
             _surveyService = surveyService;
         }
 
-        // Anket Listesi — giriş yapan adminin kendi anketleri
+        private string? CurrentUserId => User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Anket Listesi — birim kapsamındaki anketler (PersonelBirim + AuthorizedUnits)
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId))
+            if (User.Identity?.IsAuthenticated != true)
                 return RedirectToAction("Login", "Auth");
 
-            var surveys = await _surveyService.GetSurveySummariesByCreatorAsync(userId);
+            var units = AdminUnitScopeHelper.GetAuthorizedUnitNames(User);
+            var surveys = await _surveyService.GetSurveySummariesForAdminUnitScopeAsync(units);
             return View(surveys);
         }
 
@@ -34,6 +38,13 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> Detail(int id)
         {
+            var units = AdminUnitScopeHelper.GetAuthorizedUnitNames(User);
+            if (!await _surveyService.IsSurveyInAdminUnitScopeAsync(id, units))
+            {
+                TempData["Error"] = "Bu ankete atanmış birim kapsamınız dahilinde değilsiniz.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
             if (survey == null) return NotFound();
 
@@ -42,6 +53,7 @@ namespace AnketOtomasyonu.Controllers
                 Id = survey.Id,
                 Title = survey.Title,
                 Description = survey.Description,
+                CanManageSurvey = await _surveyService.IsSurveyCreatedByUserAsync(id, CurrentUserId),
                 Status = survey.Status switch
                 {
                     SurveyStatus.Active => "Aktif",
@@ -101,6 +113,19 @@ namespace AnketOtomasyonu.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Publish(int id)
         {
+            var units = AdminUnitScopeHelper.GetAuthorizedUnitNames(User);
+            if (!await _surveyService.IsSurveyInAdminUnitScopeAsync(id, units))
+            {
+                TempData["Error"] = "Bu ankete atanmış birim kapsamınız dahilinde değilsiniz.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (!await _surveyService.IsSurveyCreatedByUserAsync(id, CurrentUserId))
+            {
+                TempData["Error"] = "Bu anketi yalnızca oluşturan yönetici yayınlayabilir.";
+                return RedirectToAction(nameof(Detail), new { id });
+            }
+
             await _surveyService.PublishSurveyAsync(id);
             TempData["Success"] = "Anket yayınlandı!";
             return RedirectToAction("Detail", new { id });

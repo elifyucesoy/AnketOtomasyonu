@@ -18,6 +18,12 @@ namespace AnketOtomasyonu.Services.Interfaces
         /// <summary>Verilen unitId'lere ait birimleri döner (cache üzerinden).</summary>
         Task<List<UnitDto>> GetUnitsByIdsAsync(IEnumerable<int> unitIds, string? bearerToken = null);
 
+        /// <summary>
+        /// Login GetProfile <c>unitIds</c>: önce UnitList/cache (SuperAdmin ile aynı kaynak),
+        /// eksik id'ler için <see cref="GetUnitByIdAsync"/> — token yoksa System User (UnitById API).
+        /// </summary>
+        Task<List<UnitDto>> ResolveProfileUnitIdsAsync(IEnumerable<int> unitIds, string? userAccessToken = null);
+
         /// <summary>Tüm birim adlarını string listesi olarak döner (dropdown vb. için).</summary>
         Task<List<string>> GetAllUnitNamesAsync(string? bearerToken = null);
 
@@ -33,6 +39,11 @@ namespace AnketOtomasyonu.Services.Interfaces
         /// Fakülte/bölüm gibi üst yapı bilgisini bulmak için kullanılır.
         /// </summary>
         Task<UnitDto?> GetParentUnitAsync(int unitId, string? bearerToken = null);
+
+        /// <summary>
+        /// GET <c>UnitAllChildById</c> — birim ve tüm altındaki id'ler (childIds, children) ayrıştırılır.
+        /// </summary>
+        Task<UnitSubtreeScan?> GetUnitAllChildrenSubtreeAsync(int unitId, string? bearerToken = null);
 
         /// <summary>
         /// Cache'i temizler ve API'den yeniden çeker.

@@ -13,6 +13,8 @@ namespace AnketOtomasyonu.Models.ViewModels
         public int QuestionCount { get; set; }
         public int ResponseCount { get; set; }
         public string CreatedByName { get; set; } = string.Empty;
+        /// <summary>Giriş yapan admin bu anketi oluşturdu mu (düzenle/sil/yayın).</summary>
+        public bool IsCreatedByCurrentUser { get; set; }
         public string CreatedByBirim { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime? StartDate { get; set; }

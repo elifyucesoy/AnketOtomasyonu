@@ -15,7 +15,7 @@ namespace AnketOtomasyonu.Authorization
         public const string Admin = "ANKET_API_ADMIN";
         /// <summary>Akademik kadro (anket hedefi “Akademik” ile eşlenir).</summary>
         public const string Akademik = "ANKET_API_AKADEMIK";
-        /// <summary>İdari personel; anket hedeflerinde “Personel” (Employee) ve “İdari” bu izinle uyumludur.</summary>
+        /// <summary>İdari personel; anket hedefinde “Personel” bu kodla eşlenir (eski kayıtlarda “İdari” / “Employee” metni de aynı kod).</summary>
         public const string Idari = "ANKET_IDARI";
         public const string Student = "ANKET_API_STUDENT";
 
@@ -36,7 +36,17 @@ namespace AnketOtomasyonu.Authorization
         /// </summary>
         public const string PolicySurveyResultsUnitAdmin = "ANKET_API_SURVEY_RESULTS_UNIT_ADMIN";
 
-        /// <summary>Beş izin kodu. Girişte verilen her biri ayrı claim olur; çoklu yetki = bu yetkilerin kümülatif (birleşik) kullanımı.</summary>
+        /// <summary>
+        /// Birim Admin MVC paneli (<c>/Admin/*</c>). Yalnızca <see cref="Admin"/> izin kodu;
+        /// <see cref="SuperAdmin"/> tek başına bu rotalara erişemez (ayrı panel).
+        /// İki kod birden olan kullanıcı her iki panele de erişir.
+        /// </summary>
+        public const string PolicyAdminArea = "ANKET_API_ADMIN_AREA";
+
+        /// <summary>
+        /// Beş izin kodu; her biri ayrı izin claim’i olarak yazılır.
+        /// Çoklu yetki = birleşik erişim (OR): sahip olunan her kodun işlevleri kullanılabilir; claim’i olmayan kodların panel/policy erişimi reddedilir.
+        /// </summary>
         public static readonly string[] AllCodes =
         {
             SuperAdmin, Admin, Akademik, Idari, Student
@@ -48,17 +58,13 @@ namespace AnketOtomasyonu.Authorization
         public static bool HasAnketPermission(this ClaimsPrincipal? user, string permissionCode) =>
             user?.HasClaim(AnketPermissions.ClaimType, permissionCode) == true;
 
-        /// <summary>
-        /// Çoklu izin: ana rol tek seçilse bile cookie'de <see cref="AnketPermissions.SuperAdmin"/> varsa
-        /// SuperAdmin UI / yayın / pasif anket davranışı uygulanır.
-        /// </summary>
+        /// <summary>Yalnızca <see cref="AnketPermissions.SuperAdmin"/> claim’i — ana rol / IsInRole ile atlama yok.</summary>
         public static bool HasSuperAdminAccess(this ClaimsPrincipal? user) =>
-            user != null &&
-            (user.HasAnketPermission(AnketPermissions.SuperAdmin) || user.IsInRole("SuperAdmin"));
+            user?.HasAnketPermission(AnketPermissions.SuperAdmin) == true;
 
         /// <summary>
-        /// Çoklu izin: <see cref="AnketPermissions.Admin"/> / <see cref="AnketPermissions.Akademik"/> /
-        /// <see cref="AnketPermissions.Idari"/> kodlarından <b>herhangi biri</b> cookie’de varsa (birim listesi / sonuç için).
+        /// <see cref="AnketPermissions.Admin"/> / <see cref="AnketPermissions.Akademik"/> /
+        /// <see cref="AnketPermissions.Idari"/> kodlarından herhangi biri.
         /// </summary>
         public static bool HasAnyStaffSurveyPermission(this ClaimsPrincipal? user) =>
             user != null &&
@@ -67,39 +73,20 @@ namespace AnketOtomasyonu.Authorization
              user.HasAnketPermission(AnketPermissions.Idari));
 
         /// <summary>
-        /// Login’de tek ana rol atanır; burada personel tipi roller (öğrenci hariç) — çoklu izinle birlikte kullanılır.
+        /// Taslak/pasif dahil geniş katalog: yalnızca uzaktan verilmiş ANKET_* claim’leri (rol adına bakılmaz).
         /// </summary>
-        public static bool IsStaffSurveyRole(string? roleClaim) =>
-            roleClaim != null &&
-            (roleClaim.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) ||
-             roleClaim.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
-             roleClaim.Equals("Akademik", StringComparison.OrdinalIgnoreCase) ||
-             roleClaim.Equals("Employee", StringComparison.OrdinalIgnoreCase) ||
-             roleClaim.Equals("Idari", StringComparison.OrdinalIgnoreCase));
-
-        /// <summary>
-        /// Ana sayfa: taslak/pasif dahil geniş anket kataloğu — süper admin veya personel izinlerinden en az biri / ilgili rol.
-        /// </summary>
-        public static bool HasStaffSurveyExtendedCatalogAccess(this ClaimsPrincipal? user, string? roleClaim) =>
+        public static bool HasStaffSurveyExtendedCatalogAccess(this ClaimsPrincipal? user) =>
             user != null &&
-            (user.HasSuperAdminAccess() ||
-             user.HasAnyStaffSurveyPermission() ||
-             IsStaffSurveyRole(roleClaim));
+            (user.HasAnketPermission(AnketPermissions.SuperAdmin) ||
+             user.HasAnyStaffSurveyPermission());
 
-        /// <summary>
-        /// Sonuç görüntüleme: birim eşleştiğinde Admin / Akademik / İdari yetkilerinden <b>biri yeterli</b> (çoklu izin birleşimi).
-        /// </summary>
-        public static bool HasAnySurveyResultsStaffCapability(this ClaimsPrincipal? user, string? roleClaim)
+        /// <summary>Sonuç ekranı personel yetkisi: yalnızca Admin / Akademik / İdari izin claim’leri.</summary>
+        public static bool HasAnySurveyResultsStaffCapability(this ClaimsPrincipal? user)
         {
             if (user == null) return false;
             if (user.HasAnketPermission(AnketPermissions.Admin)) return true;
             if (user.HasAnketPermission(AnketPermissions.Akademik)) return true;
             if (user.HasAnketPermission(AnketPermissions.Idari)) return true;
-            if (roleClaim == null) return false;
-            if (roleClaim.Equals("Admin", StringComparison.OrdinalIgnoreCase)) return true;
-            if (roleClaim.Equals("Akademik", StringComparison.OrdinalIgnoreCase)) return true;
-            if (roleClaim.Equals("Employee", StringComparison.OrdinalIgnoreCase)) return true;
-            if (roleClaim.Equals("Idari", StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
     }

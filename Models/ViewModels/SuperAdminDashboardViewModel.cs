@@ -9,6 +9,7 @@ namespace AnketOtomasyonu.Models.ViewModels
         public int DraftSurveys { get; set; }
         public int PendingApprovalCount { get; set; }
         public int RejectedCount { get; set; }
+        public int PassiveSurveys { get; set; }
         public int TotalResponses { get; set; }
         public int TotalAdminCount { get; set; }
 
@@ -31,6 +32,9 @@ namespace AnketOtomasyonu.Models.ViewModels
         /// <summary>Tarih aralığı filtresi</summary>
         public string? StartDateStr { get; set; }
         public string? EndDateStr { get; set; }
+
+        /// <summary>Sıralama: "newest" (varsayılan) | "oldest"</summary>
+        public string DateSort { get; set; } = "newest";
 
         /// <summary>Tüm mevcut birim/fakülte adları (filtre dropdown için)</summary>
         public List<string> AllBirimler { get; set; } = new();

@@ -83,12 +83,7 @@ builder.Services.AddAuthorization(options =>
                 AnketPermissions.GroupCode, new List<string> { code }, Operations.Or)));
 
     addSingle(options, AnketPermissions.Student, AnketPermissions.Student);
-    // Admin policy: hem ANKET_API_ADMIN hem de ANKET_API_SUPER_ADMIN kullanıcıları AdminController'a erişebilir
-    options.AddPolicy(AnketPermissions.Admin, p =>
-        p.Requirements.Add(new AuthServiceRequirement(
-            AnketPermissions.GroupCode,
-            new List<string> { AnketPermissions.Admin, AnketPermissions.SuperAdmin },
-            Operations.Or)));
+    addSingle(options, AnketPermissions.Admin, AnketPermissions.Admin);
     addSingle(options, AnketPermissions.SuperAdmin, AnketPermissions.SuperAdmin);
     addSingle(options, AnketPermissions.Idari, AnketPermissions.Idari);
     addSingle(options, AnketPermissions.Akademik, AnketPermissions.Akademik);
@@ -102,6 +97,13 @@ builder.Services.AddAuthorization(options =>
 
     addSingle(options, AnketPermissions.PolicySurveyResultsFullAccess, AnketPermissions.SuperAdmin);
     addSingle(options, AnketPermissions.PolicySurveyResultsUnitAdmin, AnketPermissions.Admin);
+
+    // Birim Admin paneli — yalnızca ANKET_API_ADMIN (SuperAdmin ayrı route: /SuperAdmin)
+    options.AddPolicy(AnketPermissions.PolicyAdminArea, p =>
+        p.Requirements.Add(new AuthServiceRequirement(
+            AnketPermissions.GroupCode,
+            new List<string> { AnketPermissions.Admin },
+            Operations.Or)));
 });
 
 // REPOSITORIES
@@ -115,6 +117,7 @@ builder.Services.AddSingleton<IBirimService, BirimService>();     // appsettings
 builder.Services.AddSingleton<IBolumService, BolumService>();
 builder.Services.AddScoped<IKaliteApiService, KaliteApiService>(); // Kalite API (fakülte + bölüm)
 builder.Services.AddScoped<IUnitApiService, UnitApiService>();     // apiservices Unit + UnitType (7 gün cache)
+builder.Services.AddScoped<ICatalogFacultyDepartmentResolver, CatalogFacultyDepartmentResolver>();
 
 // System User — apiservices.selcuk.edu.tr auth (HasPermission vb.)
 builder.Services.AddSingleton<IApiServicesAuthService, ApiServicesAuthService>();
@@ -153,7 +156,15 @@ using (var startupScope = app.Services.CreateScope())
             IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='Surveys' AND COLUMN_NAME='UnitId')
                 ALTER TABLE Surveys ADD UnitId INT NULL;
             IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='Surveys' AND COLUMN_NAME='UnitName')
-                ALTER TABLE Surveys ADD UnitName NVARCHAR(300) NULL;");
+                ALTER TABLE Surveys ADD UnitName NVARCHAR(300) NULL;
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='SurveyResponses' AND COLUMN_NAME='RespondentUnitId')
+                ALTER TABLE SurveyResponses ADD RespondentUnitId INT NULL;
+            IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='SurveyResponses' AND COLUMN_NAME='BirimAdi')
+                ALTER TABLE SurveyResponses ADD BirimAdi NVARCHAR(300) NULL;
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_SurveyResponses_SurveyId' AND object_id = OBJECT_ID(N'SurveyResponses'))
+                CREATE NONCLUSTERED INDEX IX_SurveyResponses_SurveyId ON dbo.SurveyResponses(SurveyId);
+            IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Questions_SurveyId' AND object_id = OBJECT_ID(N'Questions'))
+                CREATE NONCLUSTERED INDEX IX_Questions_SurveyId ON dbo.Questions(SurveyId);");
 
         logger.LogInformation("[Startup] DB şeması hazır.");
     }
@@ -179,5 +190,29 @@ app.UseAuthorization();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
+app.MapControllers();
+
+if (app.Environment.IsDevelopment())
+{
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        var log = app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
+            .CreateLogger("SuperAdminRoutes");
+        foreach (var ds in app.Services.GetServices<Microsoft.AspNetCore.Routing.EndpointDataSource>())
+        {
+            foreach (var ep in ds.Endpoints)
+            {
+                if (ep is Microsoft.AspNetCore.Routing.RouteEndpoint re)
+                {
+                    var raw = re.RoutePattern.RawText ?? "";
+                    if (raw.Contains("SuperAdmin", StringComparison.OrdinalIgnoreCase)
+                        && raw.Contains("CreateSurvey", StringComparison.OrdinalIgnoreCase))
+                        log.LogInformation("CreateSurvey route: {Pattern}", raw);
+                }
+            }
+        }
+    });
+}
 
 app.Run();

@@ -15,9 +15,7 @@ namespace AnketOtomasyonu.Models.ViewModels
         public string Description { get; set; } = string.Empty;
 
         /// <summary>
-        /// Anketi kimin dolduracağını sınırlar; değerler: Employee, Student, Akademik, Idari.
-        /// Selçuk izin eşlemesi: <b>Akademik</b> hedefi ANKET_API_AKADEMIK (akademik kadro);
-        /// <b>Personel</b> (Employee) ve <b>İdari</b> hedefleri ANKET_IDARI kapsamındaki personel ile uyumludur.
+        /// Checkbox etiketleri; kullanıcıya uzaktan atanmış ANKET kodlarının (5 taneden alt küme) her biri ilgili etiketle eşlenir, çoklu izinde VEYA mantığı.
         /// </summary>
         [Display(Name = "Hedef Roller")]
         public List<string> TargetRoles { get; set; } = new();
@@ -47,9 +45,13 @@ namespace AnketOtomasyonu.Models.ViewModels
         public List<QuestionCreateViewModel> Questions { get; set; } = new();
 
         /// <summary>
-        /// Checkbox listesi; <c>Employee</c> arayüzde "Personel" olarak gösterilir.
+        /// Checkbox listesi; personel hedefi uzak sistemde <c>ANKET_IDARI</c> ile eşlenir.
+        /// Veritabanında kalan <c>Idari</c> / <c>Employee</c> metinleri kodda yine <c>ANKET_IDARI</c> ile tanınır.
         /// </summary>
-        public List<string> AvailableRoles { get; set; } = new() { "Employee", "Student", "Akademik", "Idari" };
+        public List<string> AvailableRoles { get; set; } = new()
+        {
+            "Personel", "Student", "Akademik", "Admin", "SuperAdmin"
+        };
     }
 
     public class QuestionCreateViewModel

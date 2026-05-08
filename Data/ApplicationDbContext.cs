@@ -99,6 +99,7 @@ namespace AnketOtomasyonu.Data
                 entity.Property(e => e.UserFullName).HasMaxLength(200);
                 entity.Property(e => e.FakulteAdi).HasMaxLength(300);
                 entity.Property(e => e.BolumAdi).HasMaxLength(300);
+                entity.Property(e => e.BirimAdi).HasMaxLength(300);
 
                 entity.HasMany(r => r.Answers)
                       .WithOne(a => a.SurveyResponse)

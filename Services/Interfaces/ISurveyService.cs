@@ -29,6 +29,19 @@ namespace AnketOtomasyonu.Services.Interfaces
 
         /// <summary>Admin anket listesi için — hafif.</summary>
         Task<IReadOnlyList<SurveySummaryDto>> GetSurveySummariesByCreatorAsync(string creatorUserId);
+
+        /// <summary>
+        /// Birim Admin paneli: yalnızca yetkili birim adlarıyla örtüşen anketler
+        /// (<c>CreatedByBirim</c>, <c>UnitName</c>, <c>SurveyBirim</c>).
+        /// </summary>
+        Task<IReadOnlyList<SurveySummaryDto>> GetSurveySummariesForAdminUnitScopeAsync(
+            IReadOnlyList<string> authorizedUnitNames);
+
+        /// <summary>Admin paneli / önizleme / sonuçlar: anket bu birim kapsamında mı?</summary>
+        Task<bool> IsSurveyInAdminUnitScopeAsync(int surveyId, IReadOnlyList<string> authorizedUnitNames);
+
+        /// <summary>Anketi bu kullanıcı oluşturdu mu (düzenle / sil / yayın — yalnızca sahip).</summary>
+        Task<bool> IsSurveyCreatedByUserAsync(int surveyId, string? userId);
         Task<IEnumerable<Survey>> GetSurveysByBirimAsync(string birim);
         Task<IEnumerable<Survey>> GetSurveysByBirimsAsync(List<string> birims);
         /// <param name="expandAllTokenScope">

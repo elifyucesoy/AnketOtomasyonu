@@ -4,16 +4,24 @@
 @{
     ViewData["Title"] = "SuperAdmin Dashboard";
 
-    // Helper: stat card URL
+    // Helper: stat card URL (tarih/sıralama parametrelerini korur)
     string CardUrl(string? sf) {
         var b = Model.SelectedBirim ?? "";
-        return Url.Action("Dashboard", "SuperAdmin", new { birim = b, statusFilter = sf, page = 1 })!;
+        return Url.Action("Dashboard", "SuperAdmin", new {
+            birim = b,
+            statusFilter = sf,
+            startDate = Model.StartDateStr,
+            endDate = Model.EndDateStr,
+            dateSort = Model.DateSort,
+            page = 1
+        })!;
     }
 
     // Active filter label
     var activeLabel = Model.StatusFilter switch {
         "active"   => "Aktif",
         "draft"    => "Taslak",
+        "passive"  => "Pasif",
         "pending"  => "Onay Bekleyen",
         "rejected" => "Reddedilen",
         _          => null
@@ -39,7 +47,7 @@
                 <i class="bi bi-clock-history me-1"></i>Onay Listesi
             </a>
         }
-        <a asp-controller="Admin" asp-action="CreateSurvey" class="btn fw-bold"
+        <a asp-controller="SuperAdmin" asp-action="CreateSurvey" class="btn fw-bold"
            style="background:#7c3aed;color:#fff;">
             <i class="bi bi-plus-circle me-1"></i>Yeni Anket
         </a>
@@ -54,7 +62,7 @@
 
 <!-- İSTATİSTİK KARTLARI (tıklanabilir filtreler) -->
 <div class="row g-3 mb-4">
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-sm-4 col-md-2 col-xl-auto" style="flex:1 1 0;">
         <div class="card stat-card text-center py-3 @(Model.StatusFilter == null ? "border-sa" : "")">
             <i class="bi bi-clipboard2-data" style="font-size:1.8rem;color:#7c3aed;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.TotalSurveys</h3>
@@ -62,7 +70,7 @@
             <a href="@CardUrl(null)" class="stretched-link" title="Tümünü Göster"></a>
         </div>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-sm-4 col-md-2 col-xl-auto" style="flex:1 1 0;">
         <div class="card stat-card text-center py-3 @(Model.StatusFilter == "active" ? "border-success border-2" : "")">
             <i class="bi bi-check-circle text-success" style="font-size:1.8rem;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.ActiveSurveys</h3>
@@ -70,7 +78,7 @@
             <a href="@CardUrl("active")" class="stretched-link" title="Aktif Anketler"></a>
         </div>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-sm-4 col-md-2 col-xl-auto" style="flex:1 1 0;">
         <div class="card stat-card text-center py-3 @(Model.StatusFilter == "draft" ? "border-warning border-2" : "")">
             <i class="bi bi-pencil-square text-warning" style="font-size:1.8rem;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.DraftSurveys</h3>
@@ -78,7 +86,15 @@
             <a href="@CardUrl("draft")" class="stretched-link" title="Taslak Anketler"></a>
         </div>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-sm-4 col-md-2 col-xl-auto" style="flex:1 1 0;">
+        <div class="card stat-card text-center py-3 @(Model.StatusFilter == "passive" ? "border-secondary border-2" : "")">
+            <i class="bi bi-pause-circle text-secondary" style="font-size:1.8rem;"></i>
+            <h3 class="fw-bold mt-1 mb-0">@Model.PassiveSurveys</h3>
+            <p class="text-muted small mb-0">Pasif</p>
+            <a href="@CardUrl("passive")" class="stretched-link" title="Pasif Anketler"></a>
+        </div>
+    </div>
+    <div class="col-6 col-sm-4 col-md-2 col-xl-auto" style="flex:1 1 0;">
         <div class="card stat-card text-center py-3 @(Model.StatusFilter == "pending" ? "border-danger border-2" : "")">
             <i class="bi bi-hourglass-split text-danger" style="font-size:1.8rem;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.PendingApprovalCount</h3>
@@ -86,7 +102,7 @@
             <a href="@CardUrl("pending")" class="stretched-link" title="Onay Bekleyen Anketler"></a>
         </div>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-sm-4 col-md-2 col-xl-auto" style="flex:1 1 0;">
         <div class="card stat-card text-center py-3 @(Model.StatusFilter == "rejected" ? "border-secondary border-2" : "")">
             <i class="bi bi-x-circle text-secondary" style="font-size:1.8rem;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.RejectedCount</h3>
@@ -94,7 +110,7 @@
             <a href="@CardUrl("rejected")" class="stretched-link" title="Reddedilen Anketler"></a>
         </div>
     </div>
-    <div class="col-6 col-md-2">
+    <div class="col-6 col-sm-4 col-md-2 col-xl-auto" style="flex:1 1 0;">
         <div class="card stat-card text-center py-3">
             <i class="bi bi-chat-square-text text-info" style="font-size:1.8rem;"></i>
             <h3 class="fw-bold mt-1 mb-0">@Model.TotalResponses</h3>
@@ -103,32 +119,64 @@
     </div>
 </div>
 
-<!-- FAKÜLTE FİLTRESİ + AKTİF FİLTRE CHIP -->
+<!-- FİLTRE FORMU -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body py-3">
-        <form method="get" asp-action="Dashboard" class="d-flex gap-2 align-items-center flex-wrap">
+        <form method="get" asp-action="Dashboard" id="dashFilterForm" class="d-flex gap-2 align-items-center flex-wrap">
             <input type="hidden" name="statusFilter" value="@Model.StatusFilter" />
-            <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Birim:</label>
-            <select name="birim" class="form-select form-select-sm" style="max-width:320px;" onchange="this.form.submit()">
+
+            <!-- Birim filtresi -->
+            <label class="fw-semibold mb-0" style="white-space:nowrap;"><i class="bi bi-funnel me-1"></i>Birim:</label>
+            <select name="birim" class="form-select form-select-sm" style="min-width:220px;max-width:320px;">
                 <option value="">Tüm birimler</option>
                 @foreach (var b in Model.AllBirimler)
                 {
                     <option value="@b" selected="@(Model.SelectedBirim == b ? "selected" : null)">@b</option>
                 }
             </select>
-            @if (!string.IsNullOrEmpty(Model.SelectedBirim) || !string.IsNullOrEmpty(Model.StatusFilter))
+
+            <!-- Tarih aralığı -->
+            <label class="fw-semibold mb-0 ms-1" style="white-space:nowrap;"><i class="bi bi-calendar3 me-1"></i>Tarih:</label>
+            <input type="date" name="startDate" class="form-control form-control-sm" style="width:145px;"
+                   value="@Model.StartDateStr" placeholder="gg.aa.yyyy" />
+            <span class="text-muted mb-0">—</span>
+            <input type="date" name="endDate" class="form-control form-control-sm" style="width:145px;"
+                   value="@Model.EndDateStr" placeholder="gg.aa.yyyy" />
+
+            <!-- Sıralama -->
+            <div class="btn-group btn-group-sm ms-1" role="group" title="Tarih sırası">
+                <button type="submit" name="dateSort" value="newest"
+                        class="btn @(Model.DateSort != "oldest" ? "btn-secondary" : "btn-outline-secondary")"
+                        title="En yeniden → en eskiye">
+                    <i class="bi bi-sort-down"></i>
+                </button>
+                <button type="submit" name="dateSort" value="oldest"
+                        class="btn @(Model.DateSort == "oldest" ? "btn-secondary" : "btn-outline-secondary")"
+                        title="En eskiden → en yeniye">
+                    <i class="bi bi-sort-up"></i>
+                </button>
+            </div>
+
+            <button type="submit" class="btn btn-sm fw-bold" style="background:#7c3aed;color:#fff;">
+                <i class="bi bi-search me-1"></i>Filtrele
+            </button>
+
+            @if (!string.IsNullOrEmpty(Model.SelectedBirim) || !string.IsNullOrEmpty(Model.StatusFilter)
+                 || !string.IsNullOrEmpty(Model.StartDateStr) || !string.IsNullOrEmpty(Model.EndDateStr))
             {
                 <a asp-action="Dashboard" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-x-circle me-1"></i>Temizle
                 </a>
             }
-            @if (!string.IsNullOrEmpty(activeLabel))
-            {
-                <span class="badge text-bg-light border ms-1 fs-6 fw-normal">
+        </form>
+        @if (!string.IsNullOrEmpty(activeLabel))
+        {
+            <div class="mt-2">
+                <span class="badge text-bg-light border fs-6 fw-normal">
                     <i class="bi bi-filter me-1"></i>@activeLabel filtresi aktif
                 </span>
-            }
-        </form>
+            </div>
+        }
     </div>
 </div>
 
@@ -181,7 +229,32 @@
                         {
                             <tr>
                                 <td class="fw-semibold">@s.Title</td>
-                                <td><span class="badge bg-secondary">@s.CreatedByBirim</span></td>
+                                <td>
+                                    @{
+                                        var isAllBadge = s.TargetUnits.Count > 0
+                                            && string.Equals(s.TargetUnits[0], "Tüm birimler",
+                                                StringComparison.OrdinalIgnoreCase);
+                                    }
+                                    @if (isAllBadge || s.TargetUnits.Count >= 20)
+                                    {
+                                        <span class="badge bg-secondary" style="font-size:.65rem;">Tüm birimler</span>
+                                    }
+                                    else if (s.TargetUnits.Count > 0)
+                                    {
+                                        @foreach (var u in s.TargetUnits.Take(3))
+                                        {
+                                            <span class="badge bg-secondary me-1" style="font-size:.65rem;">@u</span>
+                                        }
+                                        @if (s.TargetUnits.Count > 3)
+                                        {
+                                            <span class="text-muted small">+@(s.TargetUnits.Count - 3)</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">—</span>
+                                    }
+                                </td>
                                 <td class="text-muted small">@s.CreatedByName</td>
                                 <td><span class="badge @s.StatusBadgeClass">@s.Status</span></td>
                                 <td>
@@ -207,13 +280,13 @@
                                                     title="@(s.IsAnonymous ? "Doldurma adresini kopyala (anonim)" : "Doldurma adresini kopyala — anonim değil, giriş gerekir")">
                                                 <i class="bi bi-link-45deg sa-copy-icon" aria-hidden="true"></i>
                                             </button>
-                                            <a asp-controller="Admin" asp-action="EditSurvey" asp-route-id="@s.Id"
+                                            <a asp-controller="SuperAdmin" asp-action="EditSurvey" asp-route-id="@s.Id"
                                                class="sa-act sa-act--edit" title="Düzenle"><i class="bi bi-pencil"></i></a>
                                             <a asp-action="Results" asp-route-id="@s.Id"
                                                class="sa-act sa-act--chart" title="Sonuçlar"><i class="bi bi-bar-chart"></i></a>
                                             @if (s.Status == "Aktif")
                                             {
-                                                <form asp-controller="Admin" asp-action="Close" asp-route-id="@s.Id"
+                                                <form asp-controller="SuperAdmin" asp-action="Close" asp-route-id="@s.Id"
                                                       method="post" class="sa-act-form">
                                                     @Html.AntiForgeryToken()
                                                     <button type="submit" class="sa-act sa-act--stop" title="Kapat"
@@ -224,7 +297,7 @@
                                             }
                                             else if (s.Status == "Taslak" || s.Status == "Pasif")
                                             {
-                                                <form asp-controller="Admin" asp-action="Publish" asp-route-id="@s.Id"
+                                                <form asp-controller="SuperAdmin" asp-action="Publish" asp-route-id="@s.Id"
                                                       method="post" class="sa-act-form">
                                                     @Html.AntiForgeryToken()
                                                     <button type="submit" class="sa-act sa-act--publish" title="Yayınla"
@@ -235,7 +308,7 @@
                                             }
                                             else if (s.Status == "Kapalı")
                                             {
-                                                <form asp-controller="Admin" asp-action="Republish" asp-route-id="@s.Id"
+                                                <form asp-controller="SuperAdmin" asp-action="Republish" asp-route-id="@s.Id"
                                                       method="post" class="sa-act-form">
                                                     @Html.AntiForgeryToken()
                                                     <button type="submit" class="sa-act sa-act--publish" title="Tekrar yayınla"
@@ -248,7 +321,7 @@
                                             {
                                                 <span class="sa-act sa-act--stop-off" title="Bu durumda yayın/kapat yok"><i class="bi bi-stop-circle"></i></span>
                                             }
-                                            <form asp-controller="Admin" asp-action="Delete" asp-route-id="@s.Id"
+                                            <form asp-controller="SuperAdmin" asp-action="Delete" asp-route-id="@s.Id"
                                                   method="post" class="sa-act-form"
                                                   onsubmit="return confirm('Bu anket kalıcı olarak silinsin mi?');">
                                                 @Html.AntiForgeryToken()
@@ -278,7 +351,7 @@
                         var nextDisabled = Model.CurrentPage >= Model.TotalPages ? "disabled" : "";
                     }
                     <a class="btn btn-sm btn-outline-secondary @prevDisabled"
-                       href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, page = Model.CurrentPage - 1 })">
+                       href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, startDate = Model.StartDateStr, endDate = Model.EndDateStr, dateSort = Model.DateSort, page = Model.CurrentPage - 1 })">
                         <i class="bi bi-chevron-left"></i>
                     </a>
 
@@ -288,7 +361,7 @@
                         if (p == 1 || p == Model.TotalPages || Math.Abs(p - Model.CurrentPage) <= 2)
                         {
                             <a class="btn btn-sm @(isActive ? "btn-sa" : "btn-outline-secondary")"
-                               href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, page = p })">
+                               href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, startDate = Model.StartDateStr, endDate = Model.EndDateStr, dateSort = Model.DateSort, page = p })">
                                 @p
                             </a>
                         }
@@ -299,7 +372,7 @@
                     }
 
                     <a class="btn btn-sm btn-outline-secondary @nextDisabled"
-                       href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, page = Model.CurrentPage + 1 })">
+                       href="@Url.Action("Dashboard", "SuperAdmin", new { birim = Model.SelectedBirim, statusFilter = Model.StatusFilter, startDate = Model.StartDateStr, endDate = Model.EndDateStr, dateSort = Model.DateSort, page = Model.CurrentPage + 1 })">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </div>
