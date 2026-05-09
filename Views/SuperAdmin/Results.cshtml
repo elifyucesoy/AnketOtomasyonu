@@ -78,6 +78,9 @@
 </style>
 }
 
+<!-- Gizli logo (PDF export için) -->
+<img id="pdfLogo" src="~/images/selcuk_logo.png" alt="" style="display:none;" crossorigin="anonymous">
+
 <!-- ── BAŞLIK ── -->
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4 no-print">
     <div>
@@ -329,9 +332,22 @@ else
 
     @foreach (var q in Model.Questions)
     {
+        var typeBadge = q.QuestionType switch {
+            QuestionType.Likert => ("Likert", "#7c3aed", "bi-sliders"),
+            QuestionType.MultipleChoice => ("Çoktan Seçmeli", "#0d6efd", "bi-ui-checks"),
+            QuestionType.OpenEnded => ("Açık Uçlu", "#059669", "bi-chat-left-text"),
+            _ => ("Diğer", "#6b7280", "bi-question-circle")
+        };
         <div class="sa-card mb-4">
             <div class="px-4 py-3 border-bottom d-flex justify-content-between align-items-start gap-2">
-                <h6 class="fw-bold mb-0 lh-base flex-grow-1">@q.QuestionText</h6>
+                <div class="flex-grow-1">
+                    <div class="mb-1">
+                        <span class="badge" style="background:@(typeBadge.Item2);font-size:.72rem;border-radius:12px;">
+                            <i class="bi @(typeBadge.Item3) me-1"></i>@(typeBadge.Item1)
+                        </span>
+                    </div>
+                    <h6 class="fw-bold mb-0 lh-base">@q.QuestionText</h6>
+                </div>
                 <span class="q-pill flex-shrink-0">@q.AnswerCount yanıt</span>
             </div>
             <div class="p-4">
@@ -385,47 +401,55 @@ else
         </div>
     }
 
-    <!-- ── KATILIMCILar ── -->
-    @if (Model.Respondents.Any(r => !string.IsNullOrEmpty(r.UserFullName)))
+    <!-- ── KATILIMCI LİSTESİ (Ayrı sekme - tıklayınca açılır, PDF'e dahil edilmez) ── -->
+    @if (Model.Respondents.Any())
     {
-        <div class="sec-title mt-2"><i class="bi bi-people me-2"></i>Katılımcı Listesi</div>
-        <div class="sa-card mb-4 overflow-hidden">
-            <div class="d-flex justify-content-between align-items-center px-4 py-3 border-bottom">
-                <span class="fw-bold small">
-                    <i class="bi bi-people me-1"></i>@Model.Respondents.Count kişi
-                </span>
-                <input type="text" id="respondentSearch" class="form-control form-control-sm no-print"
-                       style="max-width:260px;" placeholder="Ad, fakülte, bölüm ara…">
-            </div>
-            <div class="table-responsive" style="max-height:440px; overflow-y:auto;">
-                <table class="table table-hover table-sm align-middle mb-0 small" id="respondentTable">
-                    <thead class="table-light" style="position:sticky;top:0;z-index:1;">
-                        <tr>
-                            <th class="ps-3">#</th>
-                            <th>Ad Soyad</th>
-                            <th>Fakülte</th>
-                            <th>Birim</th>
-                            <th>Bölüm</th>
-                            <th>UnitId</th>
-                            <th>Tarih</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @{ var idx = 1; }
-                        @foreach (var r in Model.Respondents)
-                        {
-                            <tr>
-                                <td class="ps-3 text-muted">@(idx++)</td>
-                                <td class="fw-semibold">@(r.UserFullName ?? "Anonim")</td>
-                                <td>@(r.FakulteAdi ?? "—")</td>
-                                <td>@(r.BirimAdi ?? "—")</td>
-                                <td>@(r.BolumAdi ?? "—")</td>
-                                <td class="font-monospace text-muted small">@(r.RespondentUnitId?.ToString() ?? "—")</td>
-                                <td class="text-muted">@r.SubmittedAt.ToTurkeyDateTime()</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+        <div class="no-print mt-4 mb-4" id="respondentsSection">
+            <div class="sa-card overflow-hidden">
+                <div class="px-4 py-3 border-bottom d-flex justify-content-between align-items-center"
+                     style="cursor:pointer;background:#f0fdf4;" data-bs-toggle="collapse" data-bs-target="#respondentsCollapse">
+                    <span class="fw-bold" style="color:#059669;">
+                        <i class="bi bi-people me-2"></i>Katılımcı Listesi
+                        <span class="badge bg-secondary ms-2">@Model.Respondents.Count kişi</span>
+                    </span>
+                    <span class="text-muted small">
+                        <i class="bi bi-chevron-down" id="respondentsChevron"></i> Görüntülemek için tıklayın
+                    </span>
+                </div>
+                <div class="collapse" id="respondentsCollapse">
+                    <div class="d-flex justify-content-end align-items-center px-4 py-2 border-bottom bg-light">
+                        <input type="text" id="respondentSearch" class="form-control form-control-sm"
+                               style="max-width:260px;" placeholder="Fakülte, birim, bölüm ara…">
+                    </div>
+                    <div class="table-responsive" style="max-height:600px; overflow-y:auto;">
+                        <table class="table table-hover table-sm align-middle mb-0 small" id="respondentTable">
+                            <thead class="table-light" style="position:sticky;top:0;z-index:1;">
+                                <tr>
+                                    <th class="ps-3">#</th>
+                                    <th>Fakülte</th>
+                                    <th>Birim</th>
+                                    <th>Bölüm</th>
+                                    <th>UnitId</th>
+                                    <th>Tarih</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ var idx = 1; }
+                                @foreach (var r in Model.Respondents)
+                                {
+                                    <tr>
+                                        <td class="ps-3 text-muted">@(idx++)</td>
+                                        <td>@(r.FakulteAdi ?? "—")</td>
+                                        <td>@(r.BirimAdi ?? "—")</td>
+                                        <td>@(r.BolumAdi ?? "—")</td>
+                                        <td class="font-monospace text-muted small">@(r.RespondentUnitId?.ToString() ?? "—")</td>
+                                        <td class="text-muted">@r.SubmittedAt.ToTurkeyDateTime()</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     }
@@ -433,7 +457,9 @@ else
 
 @section Scripts {
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 <script>
+Chart.register(ChartDataLabels);
 document.addEventListener('DOMContentLoaded', function () {
 
     var PAL = [
@@ -445,13 +471,18 @@ document.addEventListener('DOMContentLoaded', function () {
     function hBar(id, labels, data, colorFn) {
         var el = document.getElementById(id); if (!el) return;
         var bg = colorFn ? labels.map(colorFn) : labels.map(function(_,i){ return PAL[i%PAL.length]; });
+        var total = data.reduce(function(a,b){return a+b;},0);
         new Chart(el, {
             type: 'bar',
             data: { labels: labels, datasets: [{ label:'Kişi', data: data, backgroundColor: bg, borderRadius:7, borderSkipped:false }] },
             options: {
                 responsive:true, maintainAspectRatio:false, indexAxis:'y',
                 plugins: { legend:{display:false},
-                    tooltip:{ callbacks:{ label:function(c){ return ' '+c.parsed.x+' kişi'; } } } },
+                    tooltip:{ callbacks:{ label:function(c){ return ' '+c.parsed.x+' kişi'; } } },
+                    datalabels:{ anchor:'end', align:'end', font:{size:11,weight:'bold'},
+                        formatter:function(v){ var p=total>0?Math.round(v/total*100):0; return v+' kişi ('+p+'%)'; },
+                        color:'#333' }
+                },
                 scales: {
                     x:{ beginAtZero:true, grid:{color:'rgba(0,0,0,.05)'} },
                     y:{ ticks:{ font:{size:11}, callback:function(v){ var l=this.getLabelForValue(v); return l&&l.length>30?l.substring(0,30)+'…':l; } } }
@@ -462,6 +493,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function vBar(id, labels, data) {
         var el = document.getElementById(id); if (!el) return;
+        var total = data.reduce(function(a,b){return a+b;},0);
         new Chart(el, {
             type: 'bar',
             data: { labels: labels, datasets: [{ label:'Yanıt', data: data,
@@ -474,7 +506,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         var t=c.dataset.data.reduce(function(a,b){return a+b;},0);
                         var p=t>0?Math.round(c.parsed.y/t*100):0;
                         return ' '+c.parsed.y+' kişi ('+p+'%)';
-                    }}}
+                    }}},
+                    datalabels:{ anchor:'end', align:'end', font:{size:10,weight:'bold'},
+                        formatter:function(v){ var p=total>0?Math.round(v/total*100):0; return v+' ('+p+'%)'; },
+                        color:'#333' }
                 },
                 scales: {
                     y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,.05)'} },
@@ -487,21 +522,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function pie(id, labels, data) {
         var el = document.getElementById(id); if (!el) return;
+        var total = data.reduce(function(a,b){return a+b;},0);
         new Chart(el, {
             type:'doughnut',
             data:{ labels:labels, datasets:[{ data:data, backgroundColor:labels.map(function(_,i){return PAL[i%PAL.length];}), borderWidth:2, borderColor:'#fff' }] },
             options:{ responsive:true, maintainAspectRatio:false, cutout:'55%',
-                plugins:{ legend:{ position:'bottom', labels:{boxWidth:10,padding:10,font:{size:10}} } } }
+                plugins:{ legend:{ position:'bottom', labels:{boxWidth:10,padding:10,font:{size:10}} },
+                    datalabels:{ color:'#fff', font:{size:10,weight:'bold'},
+                        formatter:function(v){ var p=total>0?Math.round(v/total*100):0; return p>=5?p+'%':''; } }
+                }
+            }
         });
     }
 
     function doughnut(id, labels, data) {
         var el = document.getElementById(id); if (!el) return;
+        var total = data.reduce(function(a,b){return a+b;},0);
         new Chart(el, {
             type:'doughnut',
             data:{ labels:labels, datasets:[{ data:data, backgroundColor:PAL.slice(0,labels.length), borderWidth:2, borderColor:'#fff' }] },
             options:{ responsive:true, maintainAspectRatio:false, cutout:'60%',
-                plugins:{ legend:{ position:'bottom', labels:{boxWidth:9,padding:8,font:{size:9}} } } }
+                plugins:{ legend:{ position:'bottom', labels:{boxWidth:9,padding:8,font:{size:9}} },
+                    datalabels:{ color:'#fff', font:{size:9,weight:'bold'},
+                        formatter:function(v){ var p=total>0?Math.round(v/total*100):0; return p>=5?v+' ('+p+'%)':''; } }
+                }
+            }
         });
     }
 
@@ -512,14 +557,19 @@ document.addEventListener('DOMContentLoaded', function () {
             data:{
                 labels:labels,
                 datasets:[
-                    { label:barLabel, data:barData, backgroundColor:barColor+'aa', borderColor:barColor, borderWidth:1, borderRadius:6, yAxisID:'y' },
+                    { label:barLabel, data:barData, backgroundColor:barColor+'aa', borderColor:barColor, borderWidth:1, borderRadius:6, yAxisID:'y',
+                      datalabels:{ anchor:'end', align:'end', font:{size:10,weight:'bold'}, color:barColor,
+                        formatter:function(v){ return v.toFixed(1); } } },
                     { label:lineLabel, data:lineData, borderColor:lineColor, backgroundColor:lineColor+'33',
-                      type:'line', tension:0.35, pointRadius:5, pointBackgroundColor:lineColor, yAxisID:'y1' }
+                      type:'line', tension:0.35, pointRadius:5, pointBackgroundColor:lineColor, yAxisID:'y1',
+                      datalabels:{ anchor:'end', align:'top', font:{size:9,weight:'bold'}, color:lineColor,
+                        formatter:function(v){ return v+' kişi'; } } }
                 ]
             },
             options:{
                 responsive:true, maintainAspectRatio:false,
-                plugins:{ legend:{ position:'top', labels:{boxWidth:12,font:{size:11}} } },
+                plugins:{ legend:{ position:'top', labels:{boxWidth:12,font:{size:11}} },
+                    datalabels:{ display:true } },
                 scales:{
                     y: { beginAtZero:true, max:5, position:'left',  title:{display:true,text:'Memnuniyet (1-5)'}, grid:{color:'rgba(0,0,0,.05)'} },
                     y1:{ beginAtZero:true, position:'right', title:{display:true,text:'Katılım Sayısı'}, grid:{drawOnChartArea:false} },
@@ -590,7 +640,10 @@ document.addEventListener('DOMContentLoaded', function () {
             options:{
                 responsive:true, maintainAspectRatio:false, indexAxis:'y',
                 plugins:{ legend:{display:false},
-                    tooltip:{ callbacks:{ label:function(c){ return ' '+c.parsed.x.toFixed(2)+' / 5'; } } } },
+                    tooltip:{ callbacks:{ label:function(c){ return ' '+c.parsed.x.toFixed(2)+' / 5'; } } },
+                    datalabels:{ anchor:'end', align:'end', font:{size:11,weight:'bold'}, color:'#333',
+                        formatter:function(v){ return v.toFixed(2)+' / 5'; } }
+                },
                 scales:{
                     x:{ beginAtZero:true, max:5, ticks:{stepSize:1}, grid:{color:'rgba(0,0,0,.05)'} },
                     y:{ ticks:{ font:{size:11} } }
@@ -622,34 +675,90 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     }
+
+    // ── Katılımcı collapse chevron dönüşü ──
+    var rc = document.getElementById('respondentsCollapse');
+    var chevron = document.getElementById('respondentsChevron');
+    if (rc && chevron) {
+        rc.addEventListener('shown.bs.collapse', function(){ chevron.className = 'bi bi-chevron-up'; });
+        rc.addEventListener('hidden.bs.collapse', function(){ chevron.className = 'bi bi-chevron-down'; });
+    }
 });
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-function downloadResultsPDF() {
+async function downloadResultsPDF() {
+    var btn = document.querySelector('[onclick="downloadResultsPDF()"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>PDF hazırlanıyor...'; }
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pw = doc.internal.pageSize.width;
+    const ph = doc.internal.pageSize.height;
+
+    // ── Logo + Başlık ──
+    try {
+        var logoImg = document.getElementById('pdfLogo');
+        if (logoImg && logoImg.complete) {
+            doc.addImage(logoImg, 'PNG', 10, 6, 18, 18);
+        }
+    } catch(e){}
     doc.setFont('helvetica','bold');
     doc.setFontSize(16);
     doc.setTextColor(124,58,237);
-    doc.text('@Html.Raw(Model.Title.Replace("'","\\'").Replace("\n"," "))', 14, 16);
+    doc.text('@Html.Raw(Model.Title.Replace("'","\\'").Replace("\n"," "))', 32, 14);
     doc.setFont('helvetica','normal');
+    doc.setFontSize(10);
+    doc.setTextColor(27,42,74);
+    doc.text('Selçuk Üniversitesi', 32, 20);
     doc.setFontSize(9);
     doc.setTextColor(100,100,100);
     doc.text('Rapor: ' + new Date().toLocaleDateString('tr-TR',{timeZone:'Europe/Istanbul'}) +
-             ' | Toplam: @Model.TotalResponses katılımcı', 14, 23);
-    var y = 30;
+             ' | Toplam: @Model.TotalResponses katılımcı', 14, 28);
+    var y = 34;
+
+    // ── Grafikleri canvas'tan al ve PDF'e ekle ──
+    var allCharts = document.querySelectorAll('.sa-card canvas');
+    for (var ci = 0; ci < allCharts.length; ci++) {
+        var canvas = allCharts[ci];
+        // Katılımcı paneli içindeki canvas'ları atla
+        if (canvas.closest('#respondentsPanel') || canvas.closest('#respondentsContent')) continue;
+        try {
+            var imgData = canvas.toDataURL('image/png', 1.0);
+            var ratio = canvas.width / canvas.height;
+            var imgW = Math.min(pw - 28, 240);
+            var imgH = imgW / ratio;
+            if (imgH > 100) { imgH = 100; imgW = imgH * ratio; }
+            if (y + imgH + 14 > ph) { doc.addPage(); y = 14; }
+
+            // Grafik başlığını al
+            var cardEl = canvas.closest('.sa-card');
+            var titleEl = cardEl ? cardEl.querySelector('.fw-bold.small, span.fw-bold') : null;
+            if (titleEl) {
+                doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(59,7,100);
+                doc.text(titleEl.textContent.trim().substring(0,80), 14, y+4);
+                y += 8;
+            }
+            doc.addImage(imgData, 'PNG', 14, y, imgW, imgH);
+            y += imgH + 8;
+        } catch(e){ console.warn('Chart export err:', e); }
+    }
+
+    // ── Soru bazlı tablo verileri ──
     @foreach (var q in Model.Questions)
     {
         var qText = q.QuestionText.Replace("'","\\'").Replace("\n"," ").Replace("\r","");
         if (qText.Length > 100) qText = qText.Substring(0,100)+"...";
+        var typeLabel = q.QuestionType == QuestionType.Likert ? "[Likert]" : q.QuestionType == QuestionType.MultipleChoice ? "[Çoktan Seçmeli]" : "[Açık Uçlu]";
         if (q.QuestionType == QuestionType.Likert || q.QuestionType == QuestionType.MultipleChoice)
         {
             <text>
+    if (y + 30 > ph) { doc.addPage(); y = 14; }
     doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(50,50,50);
-    doc.text('@Html.Raw(qText)', 14, y+6); y += 4;
+    doc.text('@Html.Raw(typeLabel) @Html.Raw(qText)', 14, y+6); y += 4;
     var rows@(q.QuestionId) = [];
             </text>
             foreach (var opt in q.OptionResults)
@@ -668,8 +777,9 @@ function downloadResultsPDF() {
         else if (q.OpenEndedAnswers != null && q.OpenEndedAnswers.Count > 0)
         {
             <text>
+    if (y + 30 > ph) { doc.addPage(); y = 14; }
     doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(50,50,50);
-    doc.text('@Html.Raw(qText)', 14, y+6); y += 10;
+    doc.text('@Html.Raw(typeLabel) @Html.Raw(qText)', 14, y+6); y += 10;
     var oeRows@(q.QuestionId) = [];
             </text>
             foreach (var ans in q.OpenEndedAnswers.Take(20))
@@ -685,13 +795,17 @@ function downloadResultsPDF() {
             </text>
         }
     }
+
+    // ── Sayfa numaraları + Footer ──
     var pc = doc.internal.getNumberOfPages();
     for (var i=1;i<=pc;i++) {
         doc.setPage(i); doc.setFontSize(8); doc.setTextColor(160);
         doc.text('Selçuk Üniversitesi — Anket Otomasyonu | Sayfa '+i+' / '+pc,
-            doc.internal.pageSize.width/2, doc.internal.pageSize.height-8, {align:'center'});
+            pw/2, ph-8, {align:'center'});
     }
     doc.save('anket-rapor-@(Model.SurveyId)-'+new Date().toISOString().slice(0,10)+'.pdf');
+
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF İndir'; }
 }
 </script>
 }

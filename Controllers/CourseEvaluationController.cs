@@ -103,13 +103,22 @@ namespace AnketOtomasyonu.Controllers
                 return View(model);
             }
 
+            var filteredCourses = _courseEvaluationOptions.CurrentValue.FilterObisCoursesForCurrentTerm(obis.Courses);
+            if (filteredCourses.Count == 0)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "Bu döneme ait listelenecek ders bulunamadı. Dönem/yıl ayarı (CourseEvaluation) veya OBIS kayıtlarınızı kontrol edin.");
+                return View(model);
+            }
+
             var state = new CourseEvalSessionState
             {
                 SurveyId = id,
                 OgrNo = model.OgrNo.Trim(),
                 Parola = model.Parola!,
                 Profile = obis.Profile,
-                Courses = obis.Courses,
+                Courses = filteredCourses,
                 SelectedCourseKey = null
             };
             CourseEvalSessionHelper.Set(HttpContext.Session, state);
@@ -142,8 +151,16 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction(nameof(CourseEvalLogin), new { id });
             }
 
+            var filteredCourses = _courseEvaluationOptions.CurrentValue.FilterObisCoursesForCurrentTerm(obis.Courses);
+            if (filteredCourses.Count == 0)
+            {
+                CourseEvalSessionHelper.Clear(HttpContext.Session);
+                TempData["Error"] = "Bu döneme ait listelenecek ders bulunamadı.";
+                return RedirectToAction(nameof(CourseEvalLogin), new { id });
+            }
+
             st.Profile = obis.Profile;
-            st.Courses = obis.Courses;
+            st.Courses = filteredCourses;
             CourseEvalSessionHelper.Set(HttpContext.Session, st);
 
             var vm = new CourseEvalCoursesViewModel
@@ -154,7 +171,7 @@ namespace AnketOtomasyonu.Controllers
                 StudentDisplayName = obis.Profile.FullName
             };
 
-            foreach (var c in obis.Courses)
+            foreach (var c in filteredCourses)
             {
                 var uid = CourseEvalSessionHelper.BuildResponseUserId(st.OgrNo, c.Key);
                 var done = await _responseService.HasUserRespondedAsync(id, uid);
@@ -202,14 +219,22 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction(nameof(CourseEvalLogin), new { id });
             }
 
-            if (!obis.Courses.Any(c => string.Equals(c.Key, key, StringComparison.Ordinal)))
+            var filteredCourses = _courseEvaluationOptions.CurrentValue.FilterObisCoursesForCurrentTerm(obis.Courses);
+            if (filteredCourses.Count == 0)
+            {
+                CourseEvalSessionHelper.Clear(HttpContext.Session);
+                TempData["Error"] = "Bu döneme ait listelenecek ders bulunamadı.";
+                return RedirectToAction(nameof(CourseEvalLogin), new { id });
+            }
+
+            if (!filteredCourses.Any(c => string.Equals(c.Key, key, StringComparison.Ordinal)))
             {
                 TempData["Error"] = "Seçilen ders güncel listede bulunamadı.";
                 return RedirectToAction(nameof(CourseEvalCourses), new { id });
             }
 
             st.Profile = obis.Profile;
-            st.Courses = obis.Courses;
+            st.Courses = filteredCourses;
             st.SelectedCourseKey = key;
             CourseEvalSessionHelper.Set(HttpContext.Session, st);
 

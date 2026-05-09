@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Security;
 using System.Text;
 using System.Xml;
@@ -201,12 +202,27 @@ namespace AnketOtomasyonu.Services.Implementations
         private static ObisStudentProfile ReadProfile(XmlElement resultRoot, string ogrNoFallback)
         {
             var p = new ObisStudentProfile { OgrNo = ogrNoFallback.Trim() };
+            // WSDL (tns:ogrenci) alanları: ogrencifakulteadi, ogrencibolumadi, ogrenciadsoyad, …
             p.Ad = FirstTextByLocalNames(resultRoot, "OGRADI", "ogrAdi", "OgrAdi");
             p.Soyad = FirstTextByLocalNames(resultRoot, "OGRSOYADI", "ogrSoyadi", "OgrSoyadi");
-            p.FakulteKodu = FirstTextByLocalNames(resultRoot, "FAKULTEKODU", "fakulteKodu");
-            p.FakulteAdi = FirstTextByLocalNames(resultRoot, "FAKULTEADI", "fakulteAdi");
-            p.BolumKodu = FirstTextByLocalNames(resultRoot, "BOLUMKODU", "bolumKodu");
-            p.BolumAdi = FirstTextByLocalNames(resultRoot, "BOLUMADI", "bolumAdi");
+            if (string.IsNullOrEmpty(p.Ad) && string.IsNullOrEmpty(p.Soyad))
+            {
+                var birlesik = FirstTextByLocalNames(resultRoot, "ogrenciadsoyad", "OgrenciAdSoyad");
+                if (!string.IsNullOrEmpty(birlesik))
+                {
+                    var parcalar = birlesik.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                    p.Ad = parcalar.ElementAtOrDefault(0);
+                    p.Soyad = parcalar.Length > 1 ? parcalar[1] : null;
+                }
+            }
+
+            p.FakulteKodu = FirstTextByLocalNames(resultRoot, "FAKULTEKODU", "fakulteKodu", "ogrencifakultekodu", "OgrenciFakulteKodu");
+            p.FakulteAdi = FirstTextByLocalNames(resultRoot, "FAKULTEADI", "fakulteAdi", "ogrencifakulteadi", "OgrenciFakulteAdi");
+            p.BolumKodu = FirstTextByLocalNames(resultRoot, "BOLUMKODU", "bolumKodu", "ogrencibolumkodu", "OgrenciBolumKodu");
+            p.BolumAdi = FirstTextByLocalNames(resultRoot, "BOLUMADI", "bolumAdi", "ogrencibolumadi", "OgrenciBolumAdi");
+            var oNo = FirstTextByLocalNames(resultRoot, "ogrencino", "OgrenciNo", "OGRNO", "ogrNo");
+            if (!string.IsNullOrEmpty(oNo))
+                p.OgrNo = oNo.Trim();
             return p;
         }
 

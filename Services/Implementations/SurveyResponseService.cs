@@ -99,16 +99,22 @@ namespace AnketOtomasyonu.Services.Implementations
                     : userId,
                 SubmittedAt = DateTime.UtcNow,
                 IpAddress = ipAddress,
-                UserFullName = userFullName,
+                // Katılımcı adı bilinçli olarak saklanmaz (yalnızca birim/bölüm alanları).
+                UserFullName = null,
                 FakulteAdi = fakulteAdi,
                 BolumAdi = bolumAdi,
                 RespondentUnitId = respondentUnitId,
                 BirimAdi = birimAdi,
-                Answers = dto.Answers.Select(a => new SurveyAnswer
+                Answers = dto.Answers.Select(a =>
                 {
-                    QuestionId = a.QuestionId,
-                    SelectedOptionId = a.SelectedOptionId,
-                    OpenEndedAnswer = a.OpenEndedAnswer
+                    var qdef = survey.Questions.FirstOrDefault(q => q.Id == a.QuestionId);
+                    return new SurveyAnswer
+                    {
+                        QuestionId = a.QuestionId,
+                        QuestionType = qdef?.Type,
+                        SelectedOptionId = a.SelectedOptionId,
+                        OpenEndedAnswer = a.OpenEndedAnswer
+                    };
                 }).ToList()
             };
 
@@ -207,7 +213,7 @@ namespace AnketOtomasyonu.Services.Implementations
                 var (birimDisp, bolumDisp) = await EnrichBirimBolumForResultsAsync(r, unitTypes, allUnits);
                 respondentsDto.Add(new RespondentInfoDto
                 {
-                    UserFullName = r.UserFullName,
+                    UserFullName = null,
                     FakulteAdi = r.FakulteAdi,
                     BirimAdi = birimDisp,
                     BolumAdi = bolumDisp,

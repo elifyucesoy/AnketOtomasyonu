@@ -70,7 +70,7 @@ namespace AnketOtomasyonu.Controllers
         }
 
         // ─── POST: Login ─────────────────────────────────────────────────────────
-        [HttpPost]
+        [HttpPost]  
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
         {

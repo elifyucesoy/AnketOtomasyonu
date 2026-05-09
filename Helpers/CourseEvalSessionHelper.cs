@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AnketOtomasyonu.Models.ViewModels;
 
@@ -40,11 +42,19 @@ namespace AnketOtomasyonu.Helpers
         // ── Yardımcı: UserId üretimi ─────────────────────────────────────────
 
         /// <summary>
-        /// Öğrenci numarası + ders anahtarından benzersiz bir UserId oluşturur.
-        /// Aynı öğrencinin farklı dersler için ayrı yanıt verebilmesi sağlanır.
-        /// Örnek: "OBIS|12345|MAT101|2025|"
+        /// Öğrenci numarası + ders anahtarından benzersiz, kısa bir UserId üretir.
+        /// courseKey uzun olabildiğinden (ders adı vb.) doğrudan birleştirilmez; DB'de UserId nvarchar sınırına takılmamak için özet kullanılır.
         /// </summary>
         public static string BuildResponseUserId(string ogrNo, string courseKey)
-            => $"OBIS|{ogrNo}|{courseKey}";
+        {
+            var on = (ogrNo ?? "").Trim();
+            var ck = courseKey ?? "";
+            var payload = Encoding.UTF8.GetBytes($"{on}\u001f{ck}");
+            Span<byte> hash = stackalloc byte[32];
+            SHA256.HashData(payload, hash);
+            // 12 bayt hex = 24 karakter; ör. OBIS:223301156:... ≈ 36 karakter (< 128)
+            var hex = Convert.ToHexString(hash[..12]);
+            return $"OBIS:{on}:{hex}";
+        }
     }
 }

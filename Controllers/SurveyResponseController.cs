@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using AnketOtomasyonu.Configuration;
 
@@ -275,22 +276,22 @@ namespace AnketOtomasyonu.Controllers
                 var ceUserId = CourseEvalSessionHelper.BuildResponseUserId(
                     courseState.OgrNo, courseState.SelectedCourseKey);
 
-                // Ders bilgisini BirimAdi alanına yaz (raporlarda görünür)
-                var selCourse = courseState.Courses
-                    .FirstOrDefault(c => c.Key == courseState.SelectedCourseKey);
-                var dersBilgi = selCourse != null
-                    ? $"{selCourse.DersNo} — {selCourse.DersAdi}"
-                    : courseState.SelectedCourseKey;
+                // BirimAdi: öncelik fakülte; OBIS yalnızca bölüm döndüyse bölümü üst sütunda göster.
+                var ceBirim = !string.IsNullOrWhiteSpace(courseState.Profile.FakulteAdi)
+                    ? courseState.Profile.FakulteAdi.Trim()
+                    : (string.IsNullOrWhiteSpace(courseState.Profile.BolumAdi)
+                        ? null
+                        : courseState.Profile.BolumAdi.Trim());
 
                 var (ceSuc, ceMsg) = await _responseService.SubmitResponseAsync(
                     dto,
                     userId:       ceUserId,
                     ipAddress:    ip,
-                    userFullName: courseState.Profile.FullName,
+                    userFullName: null,
                     fakulteAdi:   courseState.Profile.FakulteAdi,
                     bolumAdi:     courseState.Profile.BolumAdi,
                     respondentUnitId: null,
-                    birimAdi:     dersBilgi);
+                    birimAdi:     ceBirim);
 
                 if (!ceSuc)
                 {
@@ -298,11 +299,10 @@ namespace AnketOtomasyonu.Controllers
                     return RedirectToAction("Fill", new { id = dto.SurveyId });
                 }
 
-                // Seçili dersi sıfırla — kullanıcı ders listesine döner, başka dersi değerlendirebilir
+                // OBIS akışı: aynı oturumda başka ders seçilebilsin — çıkış/ana sayfa yok.
                 courseState.SelectedCourseKey = null;
                 CourseEvalSessionHelper.Set(HttpContext.Session, courseState);
-
-                TempData["SuccessMessage"] = "Anketiniz başarıyla kaydedildi. Diğer derslerinizi de değerlendirebilirsiniz.";
+                TempData["SuccessMessage"] = "Anketiniz kaydedildi. İsterseniz başka bir ders için devam edebilirsiniz.";
                 return RedirectToAction("CourseEvalCourses", "CourseEvaluation", new { id = dto.SurveyId });
             }
             // ── DERS DEĞERLENDİRME session sonu ──────────────────────────────
@@ -355,8 +355,7 @@ namespace AnketOtomasyonu.Controllers
                 }
             }
 
-            // Demografik bilgileri claim'lerden oku
-            var userFullName = User.FindFirstValue(ClaimTypes.Name);
+            // Birim/bölüm claim'leri; katılımcı adı veritabanına yazılmaz.
             var fakulteAdi = User.FindFirstValue("FakulteAdi");
             var bolumAdi = User.FindFirstValue("BolumAdi");
 
@@ -372,7 +371,7 @@ namespace AnketOtomasyonu.Controllers
 
             var (success, message) =
                 await _responseService.SubmitResponseAsync(
-                    dto, userId, ip, userFullName, fakulteAdi, bolumForDb,
+                    dto, userId, ip, userFullName: null, fakulteAdi, bolumForDb,
                     respondentUnitId, birimAdiCatalog);
 
             if (!success)
@@ -383,15 +382,36 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction("Fill", new { id = dto.SurveyId });
             }
 
-            TempData["SuccessMessage"] = message;
-            if (survey.IsAnonymous)
-                TempData["IsAnonymous"] = "true";
+            return await CompleteSurveyAndGoHomeAsync(message);
+        }
 
-            // Anket gönderildikten sonra logout yap — bir sonraki anket için tekrar login gerekecek
-            if (!survey.IsAnonymous)
-                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        /// <summary>
+        /// Kimlik çerezi kapatılır ve (OBIS oturumu hariç) uygulama çerezleri silinir; ana sayfaya yönlendirilir.
+        /// ASP.NET oturum çerezi korunur — ders değerlendirme (OBIS) oturumu etkilenmez.
+        /// </summary>
+        private async Task<IActionResult> CompleteSurveyAndGoHomeAsync(string successMessage)
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-            return RedirectToAction("Success");
+            const string sessionCookieName = ".AspNetCore.Session";
+            var pathBase = Request.PathBase.HasValue ? Request.PathBase.Value! : "/";
+            foreach (var key in Request.Cookies.Keys.ToList())
+            {
+                if (string.Equals(key, sessionCookieName, StringComparison.Ordinal))
+                    continue;
+
+                Response.Cookies.Delete(key, new CookieOptions
+                {
+                    Path = pathBase
+                });
+                Response.Cookies.Delete(key, new CookieOptions
+                {
+                    Path = "/"
+                });
+            }
+
+            TempData["SuccessMessage"] = successMessage;
+            return RedirectToAction("Index", "Home");
         }
 
         [HttpGet]

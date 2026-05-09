@@ -8,7 +8,7 @@ namespace AnketOtomasyonu.Models.Entities
         public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
         public string? IpAddress { get; set; }
 
-        /// <summary>Katılımcının tam adı</summary>
+        /// <summary>Katılımcı adı tutulmaz (null). Tarihsel sütun; raporlarda birim/bölüm kullanılır.</summary>
         public string? UserFullName { get; set; }
         /// <summary>Öğrenci fakültesi / personel birimi</summary>
         public string? FakulteAdi { get; set; }

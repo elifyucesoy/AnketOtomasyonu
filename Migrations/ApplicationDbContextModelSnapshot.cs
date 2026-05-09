@@ -204,6 +204,9 @@ namespace AnketOtomasyonu.Migrations
                     b.Property<int>("QuestionId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("QuestionType")
+                        .HasColumnType("int");
+
                     b.Property<int?>("SelectedOptionId")
                         .HasColumnType("int");
 
@@ -279,8 +282,8 @@ namespace AnketOtomasyonu.Migrations
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.HasKey("Id");
 

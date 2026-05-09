@@ -94,7 +94,7 @@ namespace AnketOtomasyonu.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => new { e.SurveyId, e.UserId }).IsUnique();
-                entity.Property(e => e.UserId).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.UserId).HasMaxLength(128).IsRequired();
                 entity.Property(e => e.IpAddress).HasMaxLength(45);
                 entity.Property(e => e.UserFullName).HasMaxLength(200);
                 entity.Property(e => e.FakulteAdi).HasMaxLength(300);

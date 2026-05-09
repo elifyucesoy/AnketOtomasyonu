@@ -154,6 +154,59 @@ using (var startupScope = app.Services.CreateScope())
     var logger = startupScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
+        // Bekleyen EF migration'ları (SurveyType, QuestionType vb.)
+        try
+        {
+            db.Database.Migrate();
+        }
+        catch (Exception exMig)
+        {
+            logger.LogWarning(exMig, "[Startup] Database.Migrate atlandı veya hata verdi.");
+        }
+
+        // SurveyAnswers.QuestionType — dbo dışı şema / COL_LENGTH uyumsuzluğuna karşı sys.tables + dinamik ALTER
+        try
+        {
+            db.Database.ExecuteSqlRaw(@"
+                DECLARE @schema sysname;
+                SELECT TOP 1 @schema = s.name
+                FROM sys.tables t
+                INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+                WHERE t.name = N'SurveyAnswers'
+                ORDER BY CASE WHEN s.name = N'dbo' THEN 0 ELSE 1 END;
+
+                IF @schema IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM sys.columns c
+                    INNER JOIN sys.tables t ON c.object_id = t.object_id
+                    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+                    WHERE t.name = N'SurveyAnswers' AND s.name = @schema AND c.name = N'QuestionType')
+                BEGIN
+                    DECLARE @add nvarchar(max) = N'ALTER TABLE ' + QUOTENAME(@schema) + N'.' + QUOTENAME(N'SurveyAnswers') + N' ADD [QuestionType] INT NULL';
+                    EXEC sp_executesql @add;
+                END");
+            db.Database.ExecuteSqlRaw(@"
+                DECLARE @schema2 sysname;
+                SELECT TOP 1 @schema2 = s.name
+                FROM sys.tables t
+                INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+                WHERE t.name = N'SurveyAnswers'
+                ORDER BY CASE WHEN s.name = N'dbo' THEN 0 ELSE 1 END;
+                IF @schema2 IS NOT NULL
+                BEGIN
+                    DECLARE @upd nvarchar(max) = N'
+                    UPDATE sa SET sa.QuestionType = q.[Type]
+                    FROM ' + QUOTENAME(@schema2) + N'.' + QUOTENAME(N'SurveyAnswers') + N' AS sa
+                    INNER JOIN ' + QUOTENAME(@schema2) + N'.' + QUOTENAME(N'Questions') + N' AS q ON q.Id = sa.QuestionId
+                    WHERE sa.QuestionType IS NULL';
+                    EXEC sp_executesql @upd;
+                END");
+        }
+        catch (Exception exQt)
+        {
+            logger.LogError(exQt, "[Startup] SurveyAnswers.QuestionType eklenemedi — anket gönderimi SQL hatası verebilir.");
+        }
+
         // CachedUnits tablosu
         db.Database.ExecuteSqlRaw(@"
             IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'CachedUnits')
@@ -180,6 +233,8 @@ using (var startupScope = app.Services.CreateScope())
                 ALTER TABLE SurveyResponses ADD BirimAdi NVARCHAR(300) NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_SurveyResponses_SurveyId' AND object_id = OBJECT_ID(N'SurveyResponses'))
                 CREATE NONCLUSTERED INDEX IX_SurveyResponses_SurveyId ON dbo.SurveyResponses(SurveyId);
+            IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='SurveyResponses' AND COLUMN_NAME='UserId' AND CHARACTER_MAXIMUM_LENGTH IS NOT NULL AND CHARACTER_MAXIMUM_LENGTH < 128)
+                ALTER TABLE dbo.SurveyResponses ALTER COLUMN UserId NVARCHAR(128) NOT NULL;
             IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Questions_SurveyId' AND object_id = OBJECT_ID(N'Questions'))
                 CREATE NONCLUSTERED INDEX IX_Questions_SurveyId ON dbo.Questions(SurveyId);");
 
