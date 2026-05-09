@@ -1,0 +1,293 @@
+@model AnketOtomasyonu.Models.ViewModels.CourseEvalCoursesViewModel
+@{
+    ViewData["Title"] = "Ders Seçimi — " + Model.SurveyTitle;
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root { --su-navy: #1B2A4A; --su-yellow: #F9BC00; }
+
+        body {
+            background: linear-gradient(135deg, var(--su-navy) 0%, #2c4a7c 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* ── Top bar ── */
+        .top-bar {
+            background: rgba(255,255,255,.1);
+            backdrop-filter: blur(6px);
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #fff;
+        }
+
+        .top-bar .logo-icon {
+            width: 38px; height: 38px;
+            background: var(--su-yellow);
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            color: var(--su-navy);
+            margin-right: 10px;
+        }
+
+        .top-bar .title { font-weight: 700; font-size: 1rem; }
+
+        .top-bar .student-info {
+            font-size: 0.8rem;
+            opacity: .8;
+        }
+
+        .btn-logout {
+            background: rgba(255,255,255,.15);
+            border: 1px solid rgba(255,255,255,.3);
+            color: #fff;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 0.82rem;
+            transition: background .2s;
+            text-decoration: none;
+        }
+
+        .btn-logout:hover { background: rgba(255,255,255,.25); color: #fff; }
+
+        /* ── Main container ── */
+        .main-wrap {
+            max-width: 860px;
+            margin: 28px auto;
+            padding: 0 16px 40px;
+        }
+
+        .section-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,.2);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .section-card-header {
+            background: var(--su-navy);
+            color: #fff;
+            padding: 16px 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-card-header i { font-size: 1.2rem; color: var(--su-yellow); }
+        .section-card-header span { font-weight: 700; font-size: 1rem; }
+
+        /* ── Ders kartları ── */
+        .course-list { padding: 16px; display: grid; grid-template-columns: 1fr; gap: 12px; }
+
+        @@media (min-width: 640px) {
+            .course-list { grid-template-columns: 1fr 1fr; }
+        }
+
+        .course-card {
+            border: 1.5px solid #e9ecef;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: box-shadow .2s, border-color .2s;
+        }
+
+        .course-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); border-color: #c0cfe6; }
+
+        .course-code {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--su-navy);
+            background: #eef2fb;
+            border-radius: 4px;
+            padding: 2px 8px;
+            display: inline-block;
+        }
+
+        .course-name {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #2d2d2d;
+            line-height: 1.35;
+        }
+
+        .btn-join {
+            background: var(--su-navy);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 9px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            width: 100%;
+            transition: background .2s;
+            cursor: pointer;
+        }
+
+        .btn-join:hover { background: #142038; }
+
+        .btn-done {
+            background: #198754;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 9px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            width: 100%;
+            cursor: default;
+        }
+
+        /* ── Info banner ── */
+        .info-banner {
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 10px;
+            color: rgba(255,255,255,.75);
+            padding: 12px 18px;
+            font-size: 0.82rem;
+            margin-bottom: 20px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top bar -->
+    <div class="top-bar">
+        <div class="d-flex align-items-center">
+            <div class="logo-icon">🎓</div>
+            <div>
+                <div class="title">@Model.SurveyTitle</div>
+                <div class="student-info">
+                    @if (!string.IsNullOrEmpty(Model.StudentDisplayName))
+                    {
+                        <span><i class="bi bi-person-fill me-1"></i>@Model.StudentDisplayName</span>
+                        <span class="mx-2">·</span>
+                    }
+                    <span><i class="bi bi-hash"></i>@Model.OgrNo</span>
+                </div>
+            </div>
+        </div>
+        <a asp-action="CourseEvalLogin" asp-controller="CourseEvaluation" asp-route-id="@Model.SurveyId"
+           class="btn-logout">
+            <i class="bi bi-box-arrow-left me-1"></i>Çıkış
+        </a>
+    </div>
+
+    <div class="main-wrap">
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        <div class="info-banner">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            Aşağıdaki derslerden henüz değerlendirmediğiniz her biri için <strong>Ankete Katıl</strong> butonuna tıklayın.
+            Her ders için ayrı bir anket formu açılacaktır.
+        </div>
+
+        <div class="section-card">
+            <div class="section-card-header">
+                <i class="bi bi-journal-bookmark-fill"></i>
+                <span>Bu Dönem Aldığınız Dersler</span>
+                <span class="ms-auto badge" style="background:rgba(255,255,255,.2);font-weight:500;">
+                    @Model.Courses.Count ders
+                </span>
+            </div>
+
+            @if (Model.Courses.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bi bi-inbox" style="font-size:2.5rem;"></i>
+                    <p class="mt-2 mb-0">Bu dönem için ders bulunamadı.</p>
+                </div>
+            }
+            else
+            {
+                <div class="course-list">
+                    @foreach (var course in Model.Courses)
+                    {
+                        var parts = course.DisplayLine.Split(" — ");
+                        var dersNo  = parts.Length > 0 ? parts[0] : "";
+                        var dersAdi = parts.Length > 1 ? string.Join(" — ", parts.Skip(1)) : course.DisplayLine;
+
+                        <div class="course-card">
+                            @if (!string.IsNullOrWhiteSpace(dersNo))
+                            {
+                                <span class="course-code">@dersNo</span>
+                            }
+                            <div class="course-name">@dersAdi</div>
+
+                            @if (course.AlreadyResponded)
+                            {
+                                <button class="btn-done" disabled>
+                                    <i class="bi bi-check-circle-fill me-1"></i>Tamamlandı
+                                </button>
+                            }
+                            else
+                            {
+                                <form method="post"
+                                      asp-action="CourseEvalSelectCourse"
+                                      asp-controller="CourseEvaluation"
+                                      asp-route-id="@Model.SurveyId">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="courseKey" value="@course.Key">
+                                    <button type="submit" class="btn-join">
+                                        <i class="bi bi-pencil-square me-1"></i>Ankete Katıl
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Tamamlanma özeti -->
+        @{
+            var doneCount    = Model.Courses.Count(c => c.AlreadyResponded);
+            var pendingCount = Model.Courses.Count(c => !c.AlreadyResponded);
+        }
+        @if (Model.Courses.Count > 0)
+        {
+            <div class="info-banner" style="background:rgba(25,135,84,.15);border-color:rgba(25,135,84,.4);color:rgba(255,255,255,.9);">
+                <i class="bi bi-bar-chart-fill me-2"></i>
+                <strong>@doneCount / @Model.Courses.Count</strong> ders değerlendirmesi tamamlandı.
+                @if (pendingCount == 0)
+                {
+                    <span> Tüm değerlendirmelerinizi tamamladınız, teşekkürler!</span>
+                }
+            </div>
+        }
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -8,6 +8,14 @@ namespace AnketOtomasyonu.Models.Entities
         Closed = 3
     }
 
+    public enum SurveyType
+    {
+        /// <summary>Normal anket — standart akış</summary>
+        Normal = 0,
+        /// <summary>Ders değerlendirme anketi — OBIS SOAP kimlik doğrulama + ders seçimi akışı</summary>
+        CourseEvaluation = 1
+    }
+
     public enum ApprovalStatus
     {
         /// <summary>SuperAdmin onayı bekleniyor</summary>
@@ -24,6 +32,11 @@ namespace AnketOtomasyonu.Models.Entities
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public SurveyStatus Status { get; set; } = SurveyStatus.Draft;
+
+        /// <summary>
+        /// Anket tipi. Normal: standart akış, CourseEvaluation: OBIS kimlik doğrulama + ders seçimi.
+        /// </summary>
+        public SurveyType SurveyType { get; set; } = SurveyType.Normal;
         public string CreatedByUserId { get; set; } = string.Empty;
         public string CreatedByName { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -1,5 +1,6 @@
 using AnketOtomasyonu.Authorization;
 using AnketOtomasyonu.Authorization.Models;
+using AnketOtomasyonu.Configuration;
 using AnketOtomasyonu.Data;
 using AnketOtomasyonu.Repositories.Implementations;
 using AnketOtomasyonu.Repositories.Interfaces;
@@ -118,6 +119,22 @@ builder.Services.AddSingleton<IBolumService, BolumService>();
 builder.Services.AddScoped<IKaliteApiService, KaliteApiService>(); // Kalite API (fakülte + bölüm)
 builder.Services.AddScoped<IUnitApiService, UnitApiService>();     // apiservices Unit + UnitType (7 gün cache)
 builder.Services.AddScoped<ICatalogFacultyDepartmentResolver, CatalogFacultyDepartmentResolver>();
+
+// ── OBIS SOAP SERVİSİ (Ders Değerlendirme Anketi) ─────────────────────────
+builder.Services.Configure<ObisOptions>(builder.Configuration.GetSection(ObisOptions.Section));
+builder.Services.Configure<CourseEvaluationOptions>(
+    builder.Configuration.GetSection(CourseEvaluationOptions.Section));
+// ObisSoapService için ayrı HttpClient — timeout ve SSL ayarları buradan yönetilir
+builder.Services.AddHttpClient<IObisSoapService, ObisSoapService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    // Üretimde sertifika doğrulaması aktif; self-signed sertifika yoksa true bırakın
+    ServerCertificateCustomValidationCallback =
+        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+});
 
 // System User — apiservices.selcuk.edu.tr auth (HasPermission vb.)
 builder.Services.AddSingleton<IApiServicesAuthService, ApiServicesAuthService>();

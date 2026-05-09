@@ -182,6 +182,7 @@ namespace AnketOtomasyonu.Services.Implementations
                 Title = s.Title,
                 Description = s.Description,
                 Status = s.Status,
+                SurveyType = s.SurveyType,
                 CreatedByUserId = s.CreatedByUserId,
                 CreatedByName = s.CreatedByName,
                 CreatedAt = s.CreatedAt,
@@ -312,6 +313,7 @@ namespace AnketOtomasyonu.Services.Implementations
             {
                 Title = dto.Title?.Trim() ?? string.Empty,
                 Description = dto.Description?.Trim() ?? string.Empty,
+                SurveyType = dto.SurveyType,
                 IsAnonymous = dto.IsAnonymous,
                 StartDate = dto.StartDate,
                 EndDate = dto.EndDate,
@@ -437,6 +439,7 @@ namespace AnketOtomasyonu.Services.Implementations
             // Temel bilgileri güncelle (DB sütunları null kabul etmediğinden CreateSurvey ile aynı normalizasyon)
             survey.Title = dto.Title?.Trim() ?? string.Empty;
             survey.Description = dto.Description?.Trim() ?? string.Empty;
+            survey.SurveyType = dto.SurveyType;
             survey.IsAnonymous = dto.IsAnonymous;
             survey.StartDate = dto.StartDate;
             survey.EndDate = dto.EndDate;

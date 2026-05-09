@@ -85,6 +85,26 @@
                     <label asp-for="Description" class="form-label fw-semibold">Açıklama</label>
                     <textarea asp-for="Description" class="form-control" rows="3" placeholder="Anketin amacını kısaca açıklayınız..."></textarea>
                 </div>
+                @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="col-md-6">
+                        <label asp-for="SurveyType" class="form-label fw-semibold">
+                            <i class="bi bi-diagram-3 me-1" style="color:@accentColor;"></i>Anket Tipi
+                        </label>
+                        <select asp-for="SurveyType" class="form-select" id="surveyTypeSelect">
+                            <option value="0">Normal Anket</option>
+                            <option value="1">Ders Değerlendirme (OBIS Entegrasyonu)</option>
+                        </select>
+                        <small class="text-muted d-block mt-1">
+                            <strong>Ders Değerlendirme</strong> seçilirse öğrenciler OBIS kimlik doğrulama ile giriş yapar ve ders listesinden seçim yapar.
+                        </small>
+                    </div>
+                }
+                else
+                {
+                    <input type="hidden" asp-for="SurveyType" value="0" />
+                }
+
                 <div class="col-md-6">
                     <label asp-for="StartDate" class="form-label fw-semibold"><i class="bi bi-calendar-check me-1 text-success"></i>Başlangıç Tarihi</label>
                     <input asp-for="StartDate" class="form-control" type="date" id="startDate" onclick="if(typeof this.showPicker === 'function') this.showPicker();" />

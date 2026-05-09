@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using AnketOtomasyonu.Models.Entities;
 
 namespace AnketOtomasyonu.Models.DTOs
 {
@@ -7,6 +8,9 @@ namespace AnketOtomasyonu.Models.DTOs
         [Required(ErrorMessage = "Anket başlığı zorunludur")]
         [StringLength(200, ErrorMessage = "Başlık en fazla 200 karakter olabilir")]
         public string Title { get; set; } = string.Empty;
+
+        /// <summary>Anket tipi: Normal veya CourseEvaluation (Ders Değerlendirme)</summary>
+        public SurveyType SurveyType { get; set; } = SurveyType.Normal;
 
         [StringLength(1000)]
         public string Description { get; set; } = string.Empty;

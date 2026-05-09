@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Security.Claims;
+using AnketOtomasyonu.Configuration;
 
 namespace AnketOtomasyonu.Controllers
 {
@@ -92,6 +93,74 @@ namespace AnketOtomasyonu.Controllers
                     return RedirectToAction("NotFound_", "SurveyResponse");
                 return RedirectToAction("Index", "Home");
             }
+
+            // ── DERS DEĞERLENDİRME — SurveyType kontrolü ─────────────────────
+            // SurveyType = CourseEvaluation ise normal login'e gitmez, OBIS login'e yönlendirir
+            if (survey.SurveyType == SurveyType.CourseEvaluation)
+            {
+                var courseState2 = CourseEvalSessionHelper.Get(HttpContext.Session);
+                if (courseState2 == null || courseState2.SurveyId != id)
+                    return RedirectToAction("CourseEvalLogin", "CourseEvaluation", new { id });
+            }
+
+            // ── DERS DEĞERLENDİRME — OBIS session akışı ─────────────────────
+            var courseState = CourseEvalSessionHelper.Get(HttpContext.Session);
+            if (courseState != null && courseState.SurveyId == id)
+            {
+                // Ders seçilmediyse ders listesine gönder
+                if (string.IsNullOrEmpty(courseState.SelectedCourseKey))
+                    return RedirectToAction("CourseEvalCourses", "CourseEvaluation", new { id });
+
+                var ceUserId = CourseEvalSessionHelper.BuildResponseUserId(
+                    courseState.OgrNo, courseState.SelectedCourseKey);
+
+                if (await _responseService.HasUserRespondedAsync(id, ceUserId))
+                {
+                    TempData["Error"] = "Bu ders için anketi zaten doldurdunuz.";
+                    return RedirectToAction("CourseEvalCourses", "CourseEvaluation", new { id });
+                }
+
+                // Seçili dersin görünen bilgisini ViewData’ya aktar
+                var selCourse = courseState.Courses
+                    .FirstOrDefault(c => c.Key == courseState.SelectedCourseKey);
+                if (selCourse != null)
+                {
+                    ViewData["CourseEvalDersNo"]  = selCourse.DersNo;
+                    ViewData["CourseEvalDersAdi"] = selCourse.DersAdi;
+                    ViewData["CourseEvalYil"]     = selCourse.Yil;
+                    ViewData["CourseEvalKey"]     = selCourse.Key;
+                }
+                ViewData["IsCourseEval"] = true;
+
+                var ceVm = new SurveyFillViewModel
+                {
+                    SurveyId    = survey.Id,
+                    Title       = survey.Title,
+                    Description = survey.Description,
+                    IsAnonymous = survey.IsAnonymous,
+                    Questions   = survey.Questions
+                        .OrderBy(q => q.OrderIndex)
+                        .Select(q => new FillQuestionViewModel
+                        {
+                            QuestionId  = q.Id,
+                            Text        = q.Text,
+                            Type        = q.Type,
+                            IsRequired  = q.IsRequired,
+                            OrderIndex  = q.OrderIndex,
+                            Options     = q.Options
+                                .OrderBy(o => o.OrderIndex)
+                                .Select(o => new FillOptionViewModel
+                                {
+                                    Id         = o.Id,
+                                    Text       = o.Text,
+                                    Value      = o.Value,
+                                    OrderIndex = o.OrderIndex
+                                }).ToList()
+                        }).ToList()
+                };
+                return View(ceVm);
+            }
+            // ── DERS DEĞERLENDİRME session sonu ──────────────────────────────
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -189,6 +258,54 @@ namespace AnketOtomasyonu.Controllers
                 TempData["Error"] = "Anket bulunamadı.";
                 return RedirectToAction("NotFound_", "SurveyResponse");
             }
+
+            // ── SurveyType = CourseEvaluation ise session yoksa login'e gönder ──
+            if (survey.SurveyType == SurveyType.CourseEvaluation)
+            {
+                var cs = CourseEvalSessionHelper.Get(HttpContext.Session);
+                if (cs == null || cs.SurveyId != dto.SurveyId)
+                    return RedirectToAction("CourseEvalLogin", "CourseEvaluation", new { id = dto.SurveyId });
+            }
+
+            // ── DERS DEĞERLENDİRME — OBIS session Submit akışı ───────────────
+            var courseState = CourseEvalSessionHelper.Get(HttpContext.Session);
+            if (courseState != null && courseState.SurveyId == dto.SurveyId
+                && !string.IsNullOrEmpty(courseState.SelectedCourseKey))
+            {
+                var ceUserId = CourseEvalSessionHelper.BuildResponseUserId(
+                    courseState.OgrNo, courseState.SelectedCourseKey);
+
+                // Ders bilgisini BirimAdi alanına yaz (raporlarda görünür)
+                var selCourse = courseState.Courses
+                    .FirstOrDefault(c => c.Key == courseState.SelectedCourseKey);
+                var dersBilgi = selCourse != null
+                    ? $"{selCourse.DersNo} — {selCourse.DersAdi}"
+                    : courseState.SelectedCourseKey;
+
+                var (ceSuc, ceMsg) = await _responseService.SubmitResponseAsync(
+                    dto,
+                    userId:       ceUserId,
+                    ipAddress:    ip,
+                    userFullName: courseState.Profile.FullName,
+                    fakulteAdi:   courseState.Profile.FakulteAdi,
+                    bolumAdi:     courseState.Profile.BolumAdi,
+                    respondentUnitId: null,
+                    birimAdi:     dersBilgi);
+
+                if (!ceSuc)
+                {
+                    TempData["Error"] = ceMsg;
+                    return RedirectToAction("Fill", new { id = dto.SurveyId });
+                }
+
+                // Seçili dersi sıfırla — kullanıcı ders listesine döner, başka dersi değerlendirebilir
+                courseState.SelectedCourseKey = null;
+                CourseEvalSessionHelper.Set(HttpContext.Session, courseState);
+
+                TempData["SuccessMessage"] = "Anketiniz başarıyla kaydedildi. Diğer derslerinizi de değerlendirebilirsiniz.";
+                return RedirectToAction("CourseEvalCourses", "CourseEvaluation", new { id = dto.SurveyId });
+            }
+            // ── DERS DEĞERLENDİRME session sonu ──────────────────────────────
 
             string userId;
 

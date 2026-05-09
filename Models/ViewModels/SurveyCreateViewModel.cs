@@ -10,6 +10,10 @@ namespace AnketOtomasyonu.Models.ViewModels
         [Display(Name = "Anket Başlığı")]
         public string Title { get; set; } = string.Empty;
 
+        /// <summary>Anket tipi: Normal veya CourseEvaluation (Ders Değerlendirme — OBIS akışı)</summary>
+        [Display(Name = "Anket Tipi")]
+        public SurveyType SurveyType { get; set; } = SurveyType.Normal;
+
         [StringLength(1000)]
         [Display(Name = "Açıklama")]
         public string Description { get; set; } = string.Empty;

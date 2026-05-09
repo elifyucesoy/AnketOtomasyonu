@@ -11,6 +11,7 @@ namespace AnketOtomasyonu.Models.DTOs
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public SurveyStatus Status { get; set; }
+        public SurveyType SurveyType { get; set; }
         public string CreatedByUserId { get; set; } = string.Empty;
         public string CreatedByName { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }

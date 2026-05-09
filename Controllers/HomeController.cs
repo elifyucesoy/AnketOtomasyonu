@@ -113,6 +113,7 @@ namespace AnketOtomasyonu.Controllers
                         SurveyStatus.Inactive => "bg-secondary",
                         _ => "bg-danger"
                     },
+                    SurveyType = s.SurveyType,
                     QuestionCount = s.QuestionCount,
                     ResponseCount = s.ResponseCount,
                     CreatedByName = s.CreatedByName,

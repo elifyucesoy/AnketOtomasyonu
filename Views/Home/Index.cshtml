@@ -275,12 +275,25 @@ else
 
                         @if (survey.Status == "Aktif")
                         {
-                            <a asp-controller="SurveyResponse"
-                               asp-action="Fill"
-                               asp-route-id="@survey.Id"
-                               class="btn-ankete mb-2">
-                                Ankete Başla &rarr;
-                            </a>
+                            @* Ders Değerlendirme (SurveyType=CourseEvaluation) → OBIS kimlik doğrulama akışı *@
+                            @if (survey.SurveyType == AnketOtomasyonu.Models.Entities.SurveyType.CourseEvaluation)
+                            {
+                                <a asp-controller="CourseEvaluation"
+                                   asp-action="CourseEvalLogin"
+                                   asp-route-id="@survey.Id"
+                                   class="btn-ankete mb-2">
+                                    Ankete Katıl &rarr;
+                                </a>
+                            }
+                            else
+                            {
+                                <a asp-controller="SurveyResponse"
+                                   asp-action="Fill"
+                                   asp-route-id="@survey.Id"
+                                   class="btn-ankete mb-2">
+                                    Ankete Başla &rarr;
+                                </a>
+                            }
                         }
                         
                         @if (Model.CanUseStaffSurveyTools)
