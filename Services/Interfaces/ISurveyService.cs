@@ -7,8 +7,21 @@ namespace AnketOtomasyonu.Services.Interfaces
     {
         Task<Survey?> GetSurveyWithQuestionsAsync(int surveyId);
 
+        /// <summary>
+        /// ÇOK HAFİF anket başlık bilgisi: yalnızca durum / onay / tip / başlık / hedef gibi alanlar.
+        /// Soru, seçenek, yanıt ve hedef birim listeleri YÜKLENMEZ; sadece yetki ve yönlendirme kararı için kullanılır.
+        /// (CourseEvaluation, SurveyResponse erişim kontrolleri gibi sık çağrılan yerlerde kullanın.)
+        /// </summary>
+        Task<Survey?> GetSurveyMetadataAsync(int surveyId);
+
         /// <summary>Düzenleme / önizleme için — sorular + hedef birimler; yanıt kayıtları yüklenmez (hafif).</summary>
         Task<Survey?> GetSurveyForEditAsync(int surveyId);
+
+        /// <summary>
+        /// Ders değerlendirme akışı için: <see cref="Survey.TargetUnits"/> ve
+        /// <see cref="Survey.Responses"/> include edilmez; yalnızca Questions + Options.
+        /// </summary>
+        Task<Survey?> GetSurveyWithQuestionsOnlyAsync(int surveyId);
 
         /// <summary>Tüm anketler + tüm yanıtlar (ağır). Yalnızca gerçekten tam graf gerektiğinde kullanın.</summary>
         Task<IEnumerable<Survey>> GetAllSurveysAsync();

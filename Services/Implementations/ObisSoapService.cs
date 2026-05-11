@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Security;
 using System.Text;
 using System.Xml;
@@ -74,38 +76,71 @@ namespace AnketOtomasyonu.Services.Implementations
   </soap:Body>
 </soap:Envelope>";
 
+            var totalSw = Stopwatch.StartNew();
             try
             {
                 _logger.LogInformation("OBIS SOAP isteği gönderiliyor: Endpoint={Endpoint}, OgrNo={OgrNo}", opt.Endpoint, ogrNo);
 
                 using var req = new HttpRequestMessage(HttpMethod.Post, opt.Endpoint);
+                // Eski ASMX SOAP sunucusu — HTTP/1.1 zorunlu (HTTP/2 ile uyumsuzluk yaşanıyor).
+                req.Version = HttpVersion.Version11;
                 req.Content = new StringContent(body, Encoding.UTF8, "text/xml");
                 req.Headers.TryAddWithoutValidation("SOAPAction", $"\"{soapAction}\"");
 
-                using var resp = await _http.SendAsync(req, cancellationToken);
+                var netSw = Stopwatch.StartNew();
+                using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                 var xml = await resp.Content.ReadAsStringAsync(cancellationToken);
+                netSw.Stop();
 
-                _logger.LogInformation("OBIS HTTP Status: {Code}, Response length: {Len}", (int)resp.StatusCode, xml?.Length ?? 0);
-
-                // İlk 2000 karakter logla (debug için)
-                if (!string.IsNullOrEmpty(xml))
-                    _logger.LogDebug("OBIS Raw Response (ilk 2000): {Xml}", xml.Length > 2000 ? xml[..2000] : xml);
+                _logger.LogInformation(
+                    "OBIS yanıt: HTTP={Code} Süre(ağ)={NetMs}ms HTTPv{Ver} İçerik={Len} OgrNo={Ogr}",
+                    (int)resp.StatusCode, netSw.ElapsedMilliseconds, resp.Version, xml?.Length ?? 0, ogrNo);
 
                 if (!resp.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("OBIS HTTP hata: {Code}, Body: {Body}", (int)resp.StatusCode, xml?.Length > 500 ? xml[..500] : xml);
+                    _logger.LogWarning("OBIS HTTP hata: {Code} HTTPv{Ver}, Body: {Body}",
+                        (int)resp.StatusCode, resp.Version, xml?.Length > 1000 ? xml[..1000] : xml);
                     return new ObisDersListResult
                     {
                         Success = false,
-                        ErrorMessage = "Servis geçici olarak yanıt veremedi. Lütfen sonra tekrar deneyin."
+                        ErrorMessage = $"OBIS yanıt vermedi (HTTP {(int)resp.StatusCode}). Lütfen sonra tekrar deneyin."
                     };
                 }
 
-                return ParseSoap(xml, ogrNo);
+                var parseSw = Stopwatch.StartNew();
+                var result = ParseSoap(xml ?? string.Empty, ogrNo);
+                parseSw.Stop();
+
+                _logger.LogInformation(
+                    "OBIS toplam süre: ağ={NetMs}ms parse={ParseMs}ms toplam={TotalMs}ms ders={Cnt}",
+                    netSw.ElapsedMilliseconds, parseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, result.Courses?.Count ?? 0);
+
+                return result;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException oce) when (cancellationToken.IsCancellationRequested)
             {
+                // Gerçek kullanıcı/host iptali — pipeline'a bırak.
+                _logger.LogInformation(oce, "OBIS isteği üst seviye iptal edildi");
                 throw;
+            }
+            catch (TaskCanceledException tex)
+            {
+                // HttpClient timeout (kullanıcı iptal etmedi → süre doldu).
+                _logger.LogError(tex, "OBIS SOAP zaman aşımı (timeout). Toplam={Ms}ms", totalSw.ElapsedMilliseconds);
+                return new ObisDersListResult
+                {
+                    Success = false,
+                    ErrorMessage = "OBIS sunucusu yanıt vermedi (zaman aşımı). Lütfen tekrar deneyin."
+                };
+            }
+            catch (HttpRequestException hex)
+            {
+                _logger.LogError(hex, "OBIS SOAP HTTP hatası");
+                return new ObisDersListResult
+                {
+                    Success = false,
+                    ErrorMessage = "OBIS sunucusuna bağlanılamadı. Lütfen sonra tekrar deneyin."
+                };
             }
             catch (Exception ex)
             {
@@ -199,30 +234,66 @@ namespace AnketOtomasyonu.Services.Implementations
             ErrorMessage = msg
         };
 
+        // Profil alanlarının farklı OBIS varyasyonları için "yerel ad → kanonik ad" eşlemesi.
+        // Tek geçişte (O(N)) tüm alanları toplayabilmek için kullanılır.
+        // OrdinalIgnoreCase comparer kullandığımız için her benzersiz CASEFOLD için TEK kayıt.
+        // (ör. "ogrAdi" ile "OGRADI" aynı kabul edilir — sadece birini eklemek yeterlidir.)
+        private static readonly Dictionary<string, string> _profileFieldAliases =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                { "ogrAdi", "Ad" },
+                { "ogrSoyadi", "Soyad" },
+                { "ogrenciAdSoyad", "AdSoyad" },
+                { "fakulteKodu", "FakulteKodu" },
+                { "ogrenciFakulteKodu", "FakulteKodu" },
+                { "fakulteAdi", "FakulteAdi" },
+                { "ogrenciFakulteAdi", "FakulteAdi" },
+                { "bolumKodu", "BolumKodu" },
+                { "ogrenciBolumKodu", "BolumKodu" },
+                { "bolumAdi", "BolumAdi" },
+                { "ogrenciBolumAdi", "BolumAdi" },
+                { "ogrNo", "OgrNo" },
+                { "ogrenciNo", "OgrNo" },
+            };
+
+        /// <summary>
+        /// Tüm profil alanlarını XML üzerinde TEK gezintide toplar (önceki uyarlamada
+        /// her alan için ayrı GetElementsByTagName("*") çalışıyordu — N×M maliyet).
+        /// </summary>
         private static ObisStudentProfile ReadProfile(XmlElement resultRoot, string ogrNoFallback)
         {
             var p = new ObisStudentProfile { OgrNo = ogrNoFallback.Trim() };
-            // WSDL (tns:ogrenci) alanları: ogrencifakulteadi, ogrencibolumadi, ogrenciadsoyad, …
-            p.Ad = FirstTextByLocalNames(resultRoot, "OGRADI", "ogrAdi", "OgrAdi");
-            p.Soyad = FirstTextByLocalNames(resultRoot, "OGRSOYADI", "ogrSoyadi", "OgrSoyadi");
-            if (string.IsNullOrEmpty(p.Ad) && string.IsNullOrEmpty(p.Soyad))
+            var collected = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (XmlElement el in resultRoot.GetElementsByTagName("*"))
             {
-                var birlesik = FirstTextByLocalNames(resultRoot, "ogrenciadsoyad", "OgrenciAdSoyad");
-                if (!string.IsNullOrEmpty(birlesik))
-                {
-                    var parcalar = birlesik.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-                    p.Ad = parcalar.ElementAtOrDefault(0);
-                    p.Soyad = parcalar.Length > 1 ? parcalar[1] : null;
-                }
+                if (!_profileFieldAliases.TryGetValue(el.LocalName, out var canonical))
+                    continue;
+                if (collected.ContainsKey(canonical))
+                    continue;
+                var t = el.InnerText?.Trim();
+                if (string.IsNullOrEmpty(t))
+                    continue;
+                collected[canonical] = t;
             }
 
-            p.FakulteKodu = FirstTextByLocalNames(resultRoot, "FAKULTEKODU", "fakulteKodu", "ogrencifakultekodu", "OgrenciFakulteKodu");
-            p.FakulteAdi = FirstTextByLocalNames(resultRoot, "FAKULTEADI", "fakulteAdi", "ogrencifakulteadi", "OgrenciFakulteAdi");
-            p.BolumKodu = FirstTextByLocalNames(resultRoot, "BOLUMKODU", "bolumKodu", "ogrencibolumkodu", "OgrenciBolumKodu");
-            p.BolumAdi = FirstTextByLocalNames(resultRoot, "BOLUMADI", "bolumAdi", "ogrencibolumadi", "OgrenciBolumAdi");
-            var oNo = FirstTextByLocalNames(resultRoot, "ogrencino", "OgrenciNo", "OGRNO", "ogrNo");
-            if (!string.IsNullOrEmpty(oNo))
-                p.OgrNo = oNo.Trim();
+            if (collected.TryGetValue("Ad", out var ad)) p.Ad = ad;
+            if (collected.TryGetValue("Soyad", out var soyad)) p.Soyad = soyad;
+            if (string.IsNullOrEmpty(p.Ad) && string.IsNullOrEmpty(p.Soyad)
+                && collected.TryGetValue("AdSoyad", out var birlesik))
+            {
+                var parcalar = birlesik.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                p.Ad = parcalar.ElementAtOrDefault(0);
+                p.Soyad = parcalar.Length > 1 ? parcalar[1] : null;
+            }
+
+            if (collected.TryGetValue("FakulteKodu", out var fk)) p.FakulteKodu = fk;
+            if (collected.TryGetValue("FakulteAdi", out var fa)) p.FakulteAdi = fa;
+            if (collected.TryGetValue("BolumKodu", out var bk)) p.BolumKodu = bk;
+            if (collected.TryGetValue("BolumAdi", out var ba)) p.BolumAdi = ba;
+            if (collected.TryGetValue("OgrNo", out var oNo) && !string.IsNullOrEmpty(oNo))
+                p.OgrNo = oNo;
+
             return p;
         }
 

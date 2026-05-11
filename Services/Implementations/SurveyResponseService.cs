@@ -29,6 +29,25 @@ namespace AnketOtomasyonu.Services.Implementations
                 .AnyAsync(r => r.SurveyId == surveyId && r.UserId == userId);
         }
 
+        public async Task<HashSet<string>> GetRespondedUserIdsAsync(int surveyId, IEnumerable<string> userIds)
+        {
+            var distinct = (userIds ?? Enumerable.Empty<string>())
+                .Where(u => !string.IsNullOrEmpty(u))
+                .Distinct()
+                .ToList();
+
+            if (distinct.Count == 0)
+                return new HashSet<string>(StringComparer.Ordinal);
+
+            var hits = await _context.SurveyResponses
+                .AsNoTracking()
+                .Where(r => r.SurveyId == surveyId && distinct.Contains(r.UserId))
+                .Select(r => r.UserId)
+                .ToListAsync();
+
+            return new HashSet<string>(hits, StringComparer.Ordinal);
+        }
+
         public async Task<bool> HasRespondedByIpAsync(int surveyId, string ipAddress)
         {
             return await _context.SurveyResponses

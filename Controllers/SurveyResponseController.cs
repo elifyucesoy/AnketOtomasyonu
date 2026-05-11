@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.Security.Claims;
 using AnketOtomasyonu.Configuration;
 
@@ -21,17 +23,20 @@ namespace AnketOtomasyonu.Controllers
         private readonly ISurveyResponseService _responseService;
         private readonly IUnitApiService _unitApiService;
         private readonly ICatalogFacultyDepartmentResolver _catalogFacultyDepartmentResolver;
+        private readonly ILogger<SurveyResponseController> _logger;
 
         public SurveyResponseController(
             ISurveyService surveyService,
             ISurveyResponseService responseService,
             IUnitApiService unitApiService,
-            ICatalogFacultyDepartmentResolver catalogFacultyDepartmentResolver)
+            ICatalogFacultyDepartmentResolver catalogFacultyDepartmentResolver,
+            ILogger<SurveyResponseController> logger)
         {
             _surveyService = surveyService;
             _responseService = responseService;
             _unitApiService = unitApiService;
             _catalogFacultyDepartmentResolver = catalogFacultyDepartmentResolver;
+            _logger = logger;
         }
 
         // GET /SurveyResponse/PublicSurveys
@@ -72,32 +77,35 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> Fill(int id)
         {
-            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
-            if (survey == null)
+            var sw = Stopwatch.StartNew();
+
+            // Önce hafif metadata ile akış kararını ver (ders değerlendirme mi, normal mi).
+            // Bu sayede gereksiz yere ağır include'lı sorgu çalıştırmıyoruz.
+            var meta = await _surveyService.GetSurveyMetadataAsync(id);
+            if (meta == null)
             {
                 TempData["Error"] = "Anket bulunamadı.";
                 return RedirectToAction("NotFound_", "SurveyResponse");
             }
 
-            if (survey.Status != SurveyStatus.Active && !User.HasAnketPermission(AnketPermissions.SuperAdmin))
+            if (meta.Status != SurveyStatus.Active && !User.HasAnketPermission(AnketPermissions.SuperAdmin))
             {
                 TempData["Error"] = "Bu anket aktif değil.";
-                if (survey.IsAnonymous)
+                if (meta.IsAnonymous)
                     return RedirectToAction("NotFound_", "SurveyResponse");
                 return RedirectToAction("Index", "Home");
             }
 
-            if (survey.ApprovalStatus != ApprovalStatus.Approved && !User.HasAnketPermission(AnketPermissions.SuperAdmin))
+            if (meta.ApprovalStatus != ApprovalStatus.Approved && !User.HasAnketPermission(AnketPermissions.SuperAdmin))
             {
                 TempData["Error"] = "Bu anket henüz onaylanmadığı için katılıma açık değildir.";
-                if (survey.IsAnonymous)
+                if (meta.IsAnonymous)
                     return RedirectToAction("NotFound_", "SurveyResponse");
                 return RedirectToAction("Index", "Home");
             }
 
             // ── DERS DEĞERLENDİRME — SurveyType kontrolü ─────────────────────
-            // SurveyType = CourseEvaluation ise normal login'e gitmez, OBIS login'e yönlendirir
-            if (survey.SurveyType == SurveyType.CourseEvaluation)
+            if (meta.SurveyType == SurveyType.CourseEvaluation)
             {
                 var courseState2 = CourseEvalSessionHelper.Get(HttpContext.Session);
                 if (courseState2 == null || courseState2.SurveyId != id)
@@ -108,7 +116,7 @@ namespace AnketOtomasyonu.Controllers
             var courseState = CourseEvalSessionHelper.Get(HttpContext.Session);
             if (courseState != null && courseState.SurveyId == id)
             {
-                // Ders seçilmediyse ders listesine gönder
+                // Ders seçilmediyse ders listesine gönder (DB sorgusu YAPMA — gereksiz).
                 if (string.IsNullOrEmpty(courseState.SelectedCourseKey))
                     return RedirectToAction("CourseEvalCourses", "CourseEvaluation", new { id });
 
@@ -121,7 +129,17 @@ namespace AnketOtomasyonu.Controllers
                     return RedirectToAction("CourseEvalCourses", "CourseEvaluation", new { id });
                 }
 
-                // Seçili dersin görünen bilgisini ViewData’ya aktar
+                // OBIS akışı: TargetUnits gerekmiyor → en hafif sorgu (sadece Questions + Options).
+                var dbSwOnly = Stopwatch.StartNew();
+                var ceSurvey = await _surveyService.GetSurveyWithQuestionsOnlyAsync(id);
+                dbSwOnly.Stop();
+                if (ceSurvey == null)
+                {
+                    TempData["Error"] = "Anket bulunamadı.";
+                    return RedirectToAction("NotFound_", "SurveyResponse");
+                }
+
+                // Seçili dersin görünen bilgisini ViewData'ya aktar
                 var selCourse = courseState.Courses
                     .FirstOrDefault(c => c.Key == courseState.SelectedCourseKey);
                 if (selCourse != null)
@@ -135,11 +153,11 @@ namespace AnketOtomasyonu.Controllers
 
                 var ceVm = new SurveyFillViewModel
                 {
-                    SurveyId    = survey.Id,
-                    Title       = survey.Title,
-                    Description = survey.Description,
-                    IsAnonymous = survey.IsAnonymous,
-                    Questions   = survey.Questions
+                    SurveyId    = ceSurvey.Id,
+                    Title       = ceSurvey.Title,
+                    Description = ceSurvey.Description,
+                    IsAnonymous = ceSurvey.IsAnonymous,
+                    Questions   = ceSurvey.Questions
                         .OrderBy(q => q.OrderIndex)
                         .Select(q => new FillQuestionViewModel
                         {
@@ -159,9 +177,23 @@ namespace AnketOtomasyonu.Controllers
                                 }).ToList()
                         }).ToList()
                 };
+                sw.Stop();
+                _logger.LogInformation(
+                    "[Fill OBIS] SurveyId={Id} db={Db}ms toplam={Total}ms soruSayisi={Q}",
+                    id, dbSwOnly.ElapsedMilliseconds, sw.ElapsedMilliseconds, ceVm.Questions.Count);
                 return View(ceVm);
             }
             // ── DERS DEĞERLENDİRME session sonu ──────────────────────────────
+
+            // Normal akış: hedef birim/bölüm kontrolleri için TargetUnits gerekiyor → tam graf.
+            var fullSurveySw = Stopwatch.StartNew();
+            var survey = await _surveyService.GetSurveyForEditAsync(id);
+            fullSurveySw.Stop();
+            if (survey == null)
+            {
+                TempData["Error"] = "Anket bulunamadı.";
+                return RedirectToAction("NotFound_", "SurveyResponse");
+            }
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -234,16 +266,20 @@ namespace AnketOtomasyonu.Controllers
                         OrderIndex = q.OrderIndex,
                         Options = q.Options
                             .OrderBy(o => o.OrderIndex)
-                            .Select(o => new FillOptionViewModel
+                            .Select(o2 => new FillOptionViewModel
                             {
-                                Id = o.Id,
-                                Text = o.Text,
-                                Value = o.Value,
-                                OrderIndex = o.OrderIndex
+                                Id = o2.Id,
+                                Text = o2.Text,
+                                Value = o2.Value,
+                                OrderIndex = o2.OrderIndex
                             }).ToList()
                     }).ToList()
             };
 
+            sw.Stop();
+            _logger.LogInformation(
+                "[Fill Normal] SurveyId={Id} db(survey)={Db}ms toplam={Total}ms soruSayisi={Q}",
+                id, fullSurveySw.ElapsedMilliseconds, sw.ElapsedMilliseconds, vm.Questions.Count);
             return View(vm);
         }
 
@@ -253,7 +289,9 @@ namespace AnketOtomasyonu.Controllers
         {
             var ip = GetClientIp();
 
-            var survey = await _surveyService.GetSurveyWithQuestionsAsync(dto.SurveyId);
+            // Hafif metadata sorgusu — Submit içinde yalnızca SurveyType ve IsAnonymous bakılıyor;
+            // SubmitResponseAsync ayrıca kendi içinde Survey + Questions sorgusu yapıyor.
+            var survey = await _surveyService.GetSurveyMetadataAsync(dto.SurveyId);
             if (survey == null)
             {
                 TempData["Error"] = "Anket bulunamadı.";

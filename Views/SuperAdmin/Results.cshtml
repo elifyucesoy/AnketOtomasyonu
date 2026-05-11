@@ -91,6 +91,9 @@
         <button onclick="downloadResultsPDF()" class="btn btn-outline-danger btn-sm">
             <i class="bi bi-file-earmark-pdf me-1"></i>PDF İndir
         </button>
+        <button onclick="downloadResultsExcel()" class="btn btn-outline-success btn-sm">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel İndir
+        </button>
         <button onclick="window.print()" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-printer me-1"></i>Yazdır
         </button>
@@ -689,6 +692,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 async function downloadResultsPDF() {
     var btn = document.querySelector('[onclick="downloadResultsPDF()"]');
@@ -699,6 +703,32 @@ async function downloadResultsPDF() {
     const pw = doc.internal.pageSize.width;
     const ph = doc.internal.pageSize.height;
 
+    // ── Türkçe karakter destekli font yükle ──
+    var trFontLoaded = false;
+    try {
+        var fontResp = await fetch('/fonts/DejaVuSans.ttf');
+        if (fontResp.ok) {
+            var fontBuf = await fontResp.arrayBuffer();
+            var binary = ''; var bytes = new Uint8Array(fontBuf);
+            for (var fi = 0; fi < bytes.byteLength; fi++) binary += String.fromCharCode(bytes[fi]);
+            var b64Font = btoa(binary);
+            doc.addFileToVFS('DejaVuSans.ttf', b64Font);
+            doc.addFont('DejaVuSans.ttf', 'DejaVuSans', 'normal');
+        }
+        var boldResp = await fetch('/fonts/DejaVuSans-Bold.ttf');
+        if (boldResp.ok) {
+            var boldBuf = await boldResp.arrayBuffer();
+            var binaryB = ''; var bytesB = new Uint8Array(boldBuf);
+            for (var bi2 = 0; bi2 < bytesB.byteLength; bi2++) binaryB += String.fromCharCode(bytesB[bi2]);
+            var b64Bold = btoa(binaryB);
+            doc.addFileToVFS('DejaVuSans-Bold.ttf', b64Bold);
+            doc.addFont('DejaVuSans-Bold.ttf', 'DejaVuSans', 'bold');
+        }
+        trFontLoaded = true;
+    } catch(e) { console.warn('Font yüklenemedi:', e); }
+
+    var mainFont = trFontLoaded ? 'DejaVuSans' : 'helvetica';
+
     // ── Logo + Başlık ──
     try {
         var logoImg = document.getElementById('pdfLogo');
@@ -706,11 +736,11 @@ async function downloadResultsPDF() {
             doc.addImage(logoImg, 'PNG', 10, 6, 18, 18);
         }
     } catch(e){}
-    doc.setFont('helvetica','bold');
+    doc.setFont(mainFont,'bold');
     doc.setFontSize(16);
     doc.setTextColor(124,58,237);
     doc.text('@Html.Raw(Model.Title.Replace("'","\\'").Replace("\n"," "))', 32, 14);
-    doc.setFont('helvetica','normal');
+    doc.setFont(mainFont,'normal');
     doc.setFontSize(10);
     doc.setTextColor(27,42,74);
     doc.text('Selçuk Üniversitesi', 32, 20);
@@ -720,29 +750,39 @@ async function downloadResultsPDF() {
              ' | Toplam: @Model.TotalResponses katılımcı', 14, 28);
     var y = 34;
 
-    // ── Grafikleri canvas'tan al ve PDF'e ekle ──
+    // ── Grafikleri yüksek çözünürlükte PDF'e ekle ──
     var allCharts = document.querySelectorAll('.sa-card canvas');
     for (var ci = 0; ci < allCharts.length; ci++) {
         var canvas = allCharts[ci];
-        // Katılımcı paneli içindeki canvas'ları atla
         if (canvas.closest('#respondentsPanel') || canvas.closest('#respondentsContent')) continue;
         try {
-            var imgData = canvas.toDataURL('image/png', 1.0);
-            var ratio = canvas.width / canvas.height;
-            var imgW = Math.min(pw - 28, 240);
+            // Chart.js'i yüksek çözünürlükte yeniden çiz
+            var chartInstance = Chart.getChart(canvas);
+            var hiResData;
+            if (chartInstance) {
+                var origRatio = chartInstance.options.devicePixelRatio || window.devicePixelRatio || 1;
+                chartInstance.options.devicePixelRatio = 4;
+                chartInstance.resize();
+                hiResData = canvas.toDataURL('image/png', 1.0);
+                chartInstance.options.devicePixelRatio = origRatio;
+                chartInstance.resize();
+            } else {
+                hiResData = canvas.toDataURL('image/png', 1.0);
+            }
+            var ratio = canvas.clientWidth / canvas.clientHeight;
+            var imgW = Math.min(pw - 28, 260);
             var imgH = imgW / ratio;
-            if (imgH > 100) { imgH = 100; imgW = imgH * ratio; }
+            if (imgH > 120) { imgH = 120; imgW = imgH * ratio; }
             if (y + imgH + 14 > ph) { doc.addPage(); y = 14; }
 
-            // Grafik başlığını al
             var cardEl = canvas.closest('.sa-card');
             var titleEl = cardEl ? cardEl.querySelector('.fw-bold.small, span.fw-bold') : null;
             if (titleEl) {
-                doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(59,7,100);
+                doc.setFont(mainFont,'bold'); doc.setFontSize(10); doc.setTextColor(59,7,100);
                 doc.text(titleEl.textContent.trim().substring(0,80), 14, y+4);
                 y += 8;
             }
-            doc.addImage(imgData, 'PNG', 14, y, imgW, imgH);
+            doc.addImage(hiResData, 'PNG', 14, y, imgW, imgH);
             y += imgH + 8;
         } catch(e){ console.warn('Chart export err:', e); }
     }
@@ -757,7 +797,7 @@ async function downloadResultsPDF() {
         {
             <text>
     if (y + 30 > ph) { doc.addPage(); y = 14; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(50,50,50);
+    doc.setFont(mainFont,'bold'); doc.setFontSize(10); doc.setTextColor(50,50,50);
     doc.text('@Html.Raw(typeLabel) @Html.Raw(qText)', 14, y+6); y += 4;
     var rows@(q.QuestionId) = [];
             </text>
@@ -768,7 +808,7 @@ async function downloadResultsPDF() {
             }
             <text>
     doc.autoTable({ startY:y+6, head:[['Seçenek','Yanıt','Yüzde']], body:rows@(q.QuestionId),
-        styles:{fontSize:8,cellPadding:2}, headStyles:{fillColor:[124,58,237],textColor:255},
+        styles:{fontSize:8,cellPadding:2,font:mainFont}, headStyles:{fillColor:[124,58,237],textColor:255,font:mainFont},
         alternateRowStyles:{fillColor:[248,245,255]},
         columnStyles:{0:{cellWidth:120},1:{cellWidth:25},2:{cellWidth:30}}, margin:{left:14} });
     y = doc.lastAutoTable.finalY + 6;
@@ -778,7 +818,7 @@ async function downloadResultsPDF() {
         {
             <text>
     if (y + 30 > ph) { doc.addPage(); y = 14; }
-    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(50,50,50);
+    doc.setFont(mainFont,'bold'); doc.setFontSize(10); doc.setTextColor(50,50,50);
     doc.text('@Html.Raw(typeLabel) @Html.Raw(qText)', 14, y+6); y += 10;
     var oeRows@(q.QuestionId) = [];
             </text>
@@ -790,7 +830,7 @@ async function downloadResultsPDF() {
             }
             <text>
     doc.autoTable({ startY:y, head:[['Açık Uçlu Cevaplar']], body:oeRows@(q.QuestionId),
-        styles:{fontSize:8,cellPadding:2}, headStyles:{fillColor:[13,110,253],textColor:255}, margin:{left:14} });
+        styles:{fontSize:8,cellPadding:2,font:mainFont}, headStyles:{fillColor:[13,110,253],textColor:255,font:mainFont}, margin:{left:14} });
     y = doc.lastAutoTable.finalY + 6;
             </text>
         }
@@ -799,13 +839,102 @@ async function downloadResultsPDF() {
     // ── Sayfa numaraları + Footer ──
     var pc = doc.internal.getNumberOfPages();
     for (var i=1;i<=pc;i++) {
-        doc.setPage(i); doc.setFontSize(8); doc.setTextColor(160);
-        doc.text('Selçuk Üniversitesi — Anket Otomasyonu | Sayfa '+i+' / '+pc,
+        doc.setPage(i); doc.setFont(mainFont,'normal'); doc.setFontSize(8); doc.setTextColor(160);
+        doc.text('Selçuk Üniversitesi - Anket Otomasyonu | Sayfa '+i+' / '+pc,
             pw/2, ph-8, {align:'center'});
     }
     doc.save('anket-rapor-@(Model.SurveyId)-'+new Date().toISOString().slice(0,10)+'.pdf');
 
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>PDF İndir'; }
+}
+</script>
+
+<script>
+function downloadResultsExcel() {
+    var wb = XLSX.utils.book_new();
+
+    // ── 1. Özet Sayfası ──
+    var ozet = [
+        ['Anket Sonuç Raporu'],
+        [],
+        ['Anket Adı', '@Html.Raw(Model.Title.Replace("'","\\'"))'],
+        ['Toplam Katılımcı', @Model.TotalResponses],
+        ['Rapor Tarihi', new Date().toLocaleDateString('tr-TR',{timeZone:'Europe/Istanbul'})],
+        ['Genel Memnuniyet', '@(globalAvgSat > 0 ? globalAvgSat.ToString("N2") + " / 5" : "—")'],
+        ['Fakülte / Birim Sayısı', @fakulteData.Count],
+        ['Bölüm Sayısı', @bolumData.Count],
+        ['Soru Sayısı', @Model.Questions.Count]
+    ];
+    var wsOzet = XLSX.utils.aoa_to_sheet(ozet);
+    wsOzet['!cols'] = [{wch:25},{wch:40}];
+    XLSX.utils.book_append_sheet(wb, wsOzet, 'Özet');
+
+    // ── 2. Soru Bazlı Sonuçlar ──
+    var soruRows = [['Soru', 'Soru Tipi', 'Seçenek', 'Yanıt Sayısı', 'Yüzde (%)', 'Ort. Memnuniyet']];
+    @foreach (var q in Model.Questions)
+    {
+        var qTextJs = q.QuestionText.Replace("'","\\'").Replace("\n"," ").Replace("\r","");
+        var qType = q.QuestionType == QuestionType.Likert ? "Likert" : q.QuestionType == QuestionType.MultipleChoice ? "Çoktan Seçmeli" : "Açık Uçlu";
+        if (q.QuestionType == QuestionType.OpenEnded)
+        {
+            foreach (var ans in q.OpenEndedAnswers)
+            {
+                var ansJs = ans.Replace("'","\\'").Replace("\n"," ").Replace("\r","");
+                <text>soruRows.push(['@Html.Raw(qTextJs)','@qType','@Html.Raw(ansJs)',1,'','']);</text>
+            }
+        }
+        else
+        {
+            foreach (var opt in q.OptionResults)
+            {
+                var optJs = opt.OptionText.Replace("'","\\'").Replace("\n"," ");
+                <text>soruRows.push(['@Html.Raw(qTextJs)','@qType','@Html.Raw(optJs)',@opt.Count,@opt.Percentage.ToString("F1").Replace(",","."),'@(q.QuestionType == QuestionType.Likert && q.AverageSatisfaction > 0 ? q.AverageSatisfaction.ToString("N2") : "")']);</text>
+            }
+        }
+    }
+    var wsSoru = XLSX.utils.aoa_to_sheet(soruRows);
+    wsSoru['!cols'] = [{wch:45},{wch:16},{wch:30},{wch:12},{wch:10},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, wsSoru, 'Soru Sonuçları');
+
+    // ── 3. Fakülte Dağılımı ──
+    var fakRows = [['Fakülte / Birim', 'Katılım', 'Oran (%)', 'Ort. Memnuniyet']];
+    @foreach (var f in fakulteData)
+    {
+        var fName = (f.FakulteName ?? "Belirtilmemiş").Replace("'","\\'");
+        var fPct = Model.TotalResponses > 0 ? Math.Round((double)f.ResponseCount / Model.TotalResponses * 100, 1) : 0;
+        <text>fakRows.push(['@Html.Raw(fName)',@f.ResponseCount,@fPct.ToString().Replace(",","."),'@(f.AverageSatisfaction > 0 ? f.AverageSatisfaction.ToString("N2") : "—")']);</text>
+    }
+    var wsFak = XLSX.utils.aoa_to_sheet(fakRows);
+    wsFak['!cols'] = [{wch:40},{wch:12},{wch:12},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, wsFak, 'Fakülte Dağılımı');
+
+    // ── 4. Bölüm Dağılımı ──
+    var bolRows = [['Bölüm', 'Katılım']];
+    @foreach (var b in bolumData)
+    {
+        var bName = b.Label.Replace("'","\\'");
+        <text>bolRows.push(['@Html.Raw(bName)',@b.Count]);</text>
+    }
+    var wsBol = XLSX.utils.aoa_to_sheet(bolRows);
+    wsBol['!cols'] = [{wch:45},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, wsBol, 'Bölüm Dağılımı');
+
+    // ── 5. Katılımcılar ──
+    var katRows = [['#', 'Fakülte', 'Birim', 'Bölüm', 'UnitId', 'Tarih']];
+    @{ var exIdx = 1; }
+    @foreach (var r in Model.Respondents)
+    {
+        var rFak = (r.FakulteAdi ?? "—").Replace("'","\\'");
+        var rBir = (r.BirimAdi ?? "—").Replace("'","\\'");
+        var rBol = (r.BolumAdi ?? "—").Replace("'","\\'");
+        <text>katRows.push([@exIdx,'@Html.Raw(rFak)','@Html.Raw(rBir)','@Html.Raw(rBol)','@(r.RespondentUnitId?.ToString() ?? "—")','@r.SubmittedAt.ToTurkeyDateTime()']);</text>
+        exIdx++;
+    }
+    var wsKat = XLSX.utils.aoa_to_sheet(katRows);
+    wsKat['!cols'] = [{wch:6},{wch:35},{wch:35},{wch:35},{wch:10},{wch:18}];
+    XLSX.utils.book_append_sheet(wb, wsKat, 'Katılımcılar');
+
+    XLSX.writeFile(wb, 'anket-sonuc-@(Model.SurveyId)-'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 </script>
 }

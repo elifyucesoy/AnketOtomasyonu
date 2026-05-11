@@ -14,6 +14,13 @@ namespace AnketOtomasyonu.Controllers
     [AllowAnonymous]
     public sealed class CourseEvaluationController : Controller
     {
+        /// <summary>
+        /// OBIS SOAP yanıtı session'da bu süre boyunca taze sayılır; sayfa geçişlerinde
+        /// uzak servise yeniden gidilmez. Süre dolduğunda otomatik tazeleme yapılır.
+        /// Login akışını bozmaz: ilk login mutlaka OBIS'e gider.
+        /// </summary>
+        private static readonly TimeSpan ObisCacheTtl = TimeSpan.FromMinutes(5);
+
         private readonly ISurveyService _surveyService;
         private readonly ISurveyResponseService _responseService;
         private readonly IObisSoapService _obisSoapService;
@@ -34,7 +41,7 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> CourseEvalLogin(int id)
         {
-            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+            var survey = await _surveyService.GetSurveyMetadataAsync(id);
             if (survey == null)
             {
                 TempData["Error"] = "Anket bulunamadı.";
@@ -67,7 +74,7 @@ namespace AnketOtomasyonu.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CourseEvalLogin(int id, CourseEvalLoginViewModel model)
         {
-            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+            var survey = await _surveyService.GetSurveyMetadataAsync(id);
             if (survey == null)
             {
                 TempData["Error"] = "Anket bulunamadı.";
@@ -119,7 +126,8 @@ namespace AnketOtomasyonu.Controllers
                 Parola = model.Parola!,
                 Profile = obis.Profile,
                 Courses = filteredCourses,
-                SelectedCourseKey = null
+                SelectedCourseKey = null,
+                LastObisFetchUtc = DateTime.UtcNow
             };
             CourseEvalSessionHelper.Set(HttpContext.Session, state);
 
@@ -129,7 +137,7 @@ namespace AnketOtomasyonu.Controllers
         [HttpGet]
         public async Task<IActionResult> CourseEvalCourses(int id)
         {
-            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+            var survey = await _surveyService.GetSurveyMetadataAsync(id);
             if (survey == null)
             {
                 TempData["Error"] = "Anket bulunamadı.";
@@ -143,54 +151,80 @@ namespace AnketOtomasyonu.Controllers
             if (st == null || st.SurveyId != id)
                 return RedirectToAction(nameof(CourseEvalLogin), new { id });
 
-            var obis = await _obisSoapService.GetOgrenciDersleriAsync(st.OgrNo, st.Parola);
-            if (!obis.Success || obis.Courses.Count == 0)
-            {
-                CourseEvalSessionHelper.Clear(HttpContext.Session);
-                TempData["Error"] = obis.ErrorMessage ?? "Geçersiz öğrenci numarası veya şifre.";
-                return RedirectToAction(nameof(CourseEvalLogin), new { id });
-            }
+            // ── OBIS SOAP cache'i: taze ise yeniden çağırma (yavaşlama önleme) ──
+            List<Models.Obis.ObisCourseRow> filteredCourses;
+            Models.Obis.ObisStudentProfile profile;
 
-            var filteredCourses = _courseEvaluationOptions.CurrentValue.FilterObisCoursesForCurrentTerm(obis.Courses);
-            if (filteredCourses.Count == 0)
+            if (IsObisCacheFresh(st) && st.Courses.Count > 0)
             {
-                CourseEvalSessionHelper.Clear(HttpContext.Session);
-                TempData["Error"] = "Bu döneme ait listelenecek ders bulunamadı.";
-                return RedirectToAction(nameof(CourseEvalLogin), new { id });
+                profile = st.Profile;
+                filteredCourses = st.Courses;
             }
+            else
+            {
+                var obis = await _obisSoapService.GetOgrenciDersleriAsync(st.OgrNo, st.Parola);
+                if (!obis.Success || obis.Courses.Count == 0)
+                {
+                    CourseEvalSessionHelper.Clear(HttpContext.Session);
+                    TempData["Error"] = obis.ErrorMessage ?? "Geçersiz öğrenci numarası veya şifre.";
+                    return RedirectToAction(nameof(CourseEvalLogin), new { id });
+                }
 
-            st.Profile = obis.Profile;
-            st.Courses = filteredCourses;
-            CourseEvalSessionHelper.Set(HttpContext.Session, st);
+                filteredCourses = _courseEvaluationOptions.CurrentValue.FilterObisCoursesForCurrentTerm(obis.Courses);
+                if (filteredCourses.Count == 0)
+                {
+                    CourseEvalSessionHelper.Clear(HttpContext.Session);
+                    TempData["Error"] = "Bu döneme ait listelenecek ders bulunamadı.";
+                    return RedirectToAction(nameof(CourseEvalLogin), new { id });
+                }
+
+                profile = obis.Profile;
+                st.Profile = profile;
+                st.Courses = filteredCourses;
+                st.LastObisFetchUtc = DateTime.UtcNow;
+                CourseEvalSessionHelper.Set(HttpContext.Session, st);
+            }
 
             var vm = new CourseEvalCoursesViewModel
             {
                 SurveyId = id,
                 SurveyTitle = survey.Title,
                 OgrNo = st.OgrNo,
-                StudentDisplayName = obis.Profile.FullName
+                StudentDisplayName = profile.FullName
             };
 
-            foreach (var c in filteredCourses)
+            // Tek SQL: hangi ders UserId'leri ankete yanıt vermiş?
+            var courseUserIds = filteredCourses
+                .Select(c => CourseEvalSessionHelper.BuildResponseUserId(st.OgrNo, c.Key))
+                .ToList();
+            var respondedSet = await _responseService.GetRespondedUserIdsAsync(id, courseUserIds);
+
+            for (int i = 0; i < filteredCourses.Count; i++)
             {
-                var uid = CourseEvalSessionHelper.BuildResponseUserId(st.OgrNo, c.Key);
-                var done = await _responseService.HasUserRespondedAsync(id, uid);
+                var c = filteredCourses[i];
                 vm.Courses.Add(new CourseEvalCourseItemViewModel
                 {
                     Key = c.Key,
                     DisplayLine = c.DisplayLine,
-                    AlreadyResponded = done
+                    AlreadyResponded = respondedSet.Contains(courseUserIds[i])
                 });
             }
 
             return View(vm);
         }
 
+        /// <summary>
+        /// Session'da saklı OBIS yanıtı, <see cref="ObisCacheTtl"/> süresi içinde alınmışsa taze sayılır.
+        /// </summary>
+        private static bool IsObisCacheFresh(CourseEvalSessionState st)
+            => st.LastObisFetchUtc.HasValue
+               && (DateTime.UtcNow - st.LastObisFetchUtc.Value) < ObisCacheTtl;
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CourseEvalSelectCourse(int id, [FromForm] string? courseKey)
         {
-            var survey = await _surveyService.GetSurveyWithQuestionsAsync(id);
+            var survey = await _surveyService.GetSurveyMetadataAsync(id);
             if (survey == null)
             {
                 TempData["Error"] = "Anket bulunamadı.";
@@ -211,20 +245,35 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction(nameof(CourseEvalCourses), new { id });
             }
 
-            var obis = await _obisSoapService.GetOgrenciDersleriAsync(st.OgrNo, st.Parola);
-            if (!obis.Success || obis.Courses.Count == 0)
-            {
-                CourseEvalSessionHelper.Clear(HttpContext.Session);
-                TempData["Error"] = obis.ErrorMessage ?? "Geçersiz öğrenci numarası veya şifre.";
-                return RedirectToAction(nameof(CourseEvalLogin), new { id });
-            }
+            // Cache taze ise OBIS'e tekrar gitme; doğrulama session'daki son listeden yapılır.
+            List<Models.Obis.ObisCourseRow> filteredCourses;
+            Models.Obis.ObisStudentProfile profile;
 
-            var filteredCourses = _courseEvaluationOptions.CurrentValue.FilterObisCoursesForCurrentTerm(obis.Courses);
-            if (filteredCourses.Count == 0)
+            if (IsObisCacheFresh(st) && st.Courses.Count > 0)
             {
-                CourseEvalSessionHelper.Clear(HttpContext.Session);
-                TempData["Error"] = "Bu döneme ait listelenecek ders bulunamadı.";
-                return RedirectToAction(nameof(CourseEvalLogin), new { id });
+                profile = st.Profile;
+                filteredCourses = st.Courses;
+            }
+            else
+            {
+                var obis = await _obisSoapService.GetOgrenciDersleriAsync(st.OgrNo, st.Parola);
+                if (!obis.Success || obis.Courses.Count == 0)
+                {
+                    CourseEvalSessionHelper.Clear(HttpContext.Session);
+                    TempData["Error"] = obis.ErrorMessage ?? "Geçersiz öğrenci numarası veya şifre.";
+                    return RedirectToAction(nameof(CourseEvalLogin), new { id });
+                }
+
+                filteredCourses = _courseEvaluationOptions.CurrentValue.FilterObisCoursesForCurrentTerm(obis.Courses);
+                if (filteredCourses.Count == 0)
+                {
+                    CourseEvalSessionHelper.Clear(HttpContext.Session);
+                    TempData["Error"] = "Bu döneme ait listelenecek ders bulunamadı.";
+                    return RedirectToAction(nameof(CourseEvalLogin), new { id });
+                }
+
+                profile = obis.Profile;
+                st.LastObisFetchUtc = DateTime.UtcNow;
             }
 
             if (!filteredCourses.Any(c => string.Equals(c.Key, key, StringComparison.Ordinal)))
@@ -233,7 +282,7 @@ namespace AnketOtomasyonu.Controllers
                 return RedirectToAction(nameof(CourseEvalCourses), new { id });
             }
 
-            st.Profile = obis.Profile;
+            st.Profile = profile;
             st.Courses = filteredCourses;
             st.SelectedCourseKey = key;
             CourseEvalSessionHelper.Set(HttpContext.Session, st);

@@ -60,5 +60,12 @@ namespace AnketOtomasyonu.Models.ViewModels
         public List<ObisCourseRow>  Courses  { get; set; } = new();
         /// <summary>Öğrencinin seçtiği ders anahtarı (ObisCourseRow.Key)</summary>
         public string? SelectedCourseKey { get; set; }
+
+        /// <summary>
+        /// OBIS SOAP servisinden son başarılı ders çekiminin zamanı (UTC).
+        /// Sayfa geçişlerinde bu değer üzerinden TTL kontrolü yapılır;
+        /// böylece her sayfa açılışında uzak SOAP'a gidilmez (yavaşlama önlenir).
+        /// </summary>
+        public DateTime? LastObisFetchUtc { get; set; }
     }
 }

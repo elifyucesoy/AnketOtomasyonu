@@ -124,16 +124,24 @@ builder.Services.AddScoped<ICatalogFacultyDepartmentResolver, CatalogFacultyDepa
 builder.Services.Configure<ObisOptions>(builder.Configuration.GetSection(ObisOptions.Section));
 builder.Services.Configure<CourseEvaluationOptions>(
     builder.Configuration.GetSection(CourseEvaluationOptions.Section));
-// ObisSoapService için ayrı HttpClient — timeout ve SSL ayarları buradan yönetilir
+// ObisSoapService için ayrı HttpClient — eski ASMX sunucusuyla uyumlu HTTP/1.1
+// Timeout 30 sn (OBIS bazen yavaş yanıt veriyor — 15 sn'de erken kesip hata vermek istemiyoruz)
+// Bağlantı havuzu açık ki ardışık çağrılarda TLS handshake tekrarlanmasın.
 builder.Services.AddHttpClient<IObisSoapService, ObisSoapService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestVersion = System.Net.HttpVersion.Version11;
 })
-.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
 {
-    // Üretimde sertifika doğrulaması aktif; self-signed sertifika yoksa true bırakın
-    ServerCertificateCustomValidationCallback =
-        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+    SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+    {
+        // OBIS sunucusunda self-signed sertifika sorunu yaşandığı için bilinçli olarak atlanıyor.
+        // Üretim için doğrulamanın açılması önerilir.
+        RemoteCertificateValidationCallback = (_, _, _, _) => true
+    }
 });
 
 // System User — apiservices.selcuk.edu.tr auth (HasPermission vb.)
@@ -245,6 +253,29 @@ using (var startupScope = app.Services.CreateScope())
         logger.LogError(ex, "[Startup] DB hazırlık hatası — uygulama çalışmaya devam ediyor.");
     }
 }
+
+// OBIS bağlantısını arka planda ön-ısıt (DNS + TLS handshake önden alınır;
+// ilk öğrenci girişinde "ilk seferki yavaşlık" hissi azalır).
+_ = Task.Run(async () =>
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var endpoint = cfg["Obis:Endpoint"];
+        if (!string.IsNullOrWhiteSpace(endpoint)
+            && Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+            using var head = new HttpRequestMessage(HttpMethod.Head, $"{uri.Scheme}://{uri.Host}");
+            await http.SendAsync(head, HttpCompletionOption.ResponseHeadersRead);
+        }
+    }
+    catch
+    {
+        // Önızıtma başarısızsa sessizce geç — uygulamayı engelleme.
+    }
+});
 
 if (!app.Environment.IsDevelopment())
 {

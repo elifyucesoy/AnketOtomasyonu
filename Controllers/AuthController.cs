@@ -207,12 +207,17 @@ namespace AnketOtomasyonu.Controllers
         }
 
         // ─── Logout ──────────────────────────────────────────────────────────────
+        // SuperAdmin / Admin / Akademik panelinden çıkışta doğrudan anonim
+        // anket listesi (/Home/Index) sayfasına yönlendirilir; eski "Login"
+        // davranışı kaldırılmıştır. Home/Index [AllowAnonymous] olduğundan
+        // erişim için yeniden giriş zorunlu değildir.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Login");
+            HttpContext.Session.Clear();
+            return RedirectToAction("Index", "Home");
         }
 
         [HttpGet]

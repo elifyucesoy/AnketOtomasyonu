@@ -28,13 +28,67 @@ namespace AnketOtomasyonu.Services.Implementations
                 .FirstOrDefaultAsync(s => s.Id == surveyId);
         }
 
-        public async Task<Survey?> GetSurveyForEditAsync(int surveyId)
+        /// <summary>
+        /// Yetki kontrolü, durum/onay/tip/başlık karşılaştırması gibi sık çağrılan yerlerde
+        /// kullanılan çok hafif sorgu. Yanıt/soru/seçenek/hedef birim koleksiyonları YÜKLENMEZ
+        /// (eski "GetSurveyWithQuestionsAsync" varyasyonu Responses include ettiği için, popüler
+        /// anketlerde her sayfa açılışında binlerce satır çekip 30+ sn yavaşlamaya neden olabiliyordu).
+        /// </summary>
+        public async Task<Survey?> GetSurveyMetadataAsync(int surveyId)
         {
             return await _context.Surveys
                 .AsNoTracking()
+                .Where(s => s.Id == surveyId)
+                .Select(s => new Survey
+                {
+                    Id = s.Id,
+                    Title = s.Title,
+                    Description = s.Description,
+                    Status = s.Status,
+                    ApprovalStatus = s.ApprovalStatus,
+                    ApprovalNote = s.ApprovalNote,
+                    ApprovedAt = s.ApprovedAt,
+                    SurveyType = s.SurveyType,
+                    IsAnonymous = s.IsAnonymous,
+                    CreatedAt = s.CreatedAt,
+                    CreatedByUserId = s.CreatedByUserId,
+                    CreatedByName = s.CreatedByName,
+                    CreatedByBirim = s.CreatedByBirim,
+                    UnitId = s.UnitId,
+                    UnitName = s.UnitName,
+                    StartDate = s.StartDate,
+                    EndDate = s.EndDate,
+                    TargetRoles = s.TargetRoles
+                })
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<Survey?> GetSurveyForEditAsync(int surveyId)
+        {
+            // AsSplitQuery: tek SQL'de Question×Option×TargetUnit Cartesian product yerine
+            // 3 ayrı sorgu ile yüklenir. Popüler/büyük anketlerde N×M×K satır şişmesini önler
+            // (EF "MultipleCollectionIncludeWarning" uyarısının da kalkması için).
+            return await _context.Surveys
+                .AsNoTracking()
+                .AsSplitQuery()
                 .Include(s => s.Questions.OrderBy(q => q.OrderIndex))
                     .ThenInclude(q => q.Options.OrderBy(o => o.OrderIndex))
                 .Include(s => s.TargetUnits)
+                .FirstOrDefaultAsync(s => s.Id == surveyId);
+        }
+
+        /// <summary>
+        /// Ders değerlendirme (OBIS) gibi yalnızca soru/seçenek render'ı yapan akışlar için
+        /// <see cref="Survey.TargetUnits"/> include edilmeden, projeksiyonla DB'den yalnız
+        /// gerekli kolonlar getirilir. Daha az alan = daha az satır = daha hızlı.
+        /// </summary>
+        public async Task<Survey?> GetSurveyWithQuestionsOnlyAsync(int surveyId)
+        {
+            return await _context.Surveys
+                .AsNoTracking()
+                .AsSplitQuery()
+                .Include(s => s.Questions.OrderBy(q => q.OrderIndex))
+                    .ThenInclude(q => q.Options.OrderBy(o => o.OrderIndex))
                 .FirstOrDefaultAsync(s => s.Id == surveyId);
         }
 

@@ -21,17 +21,22 @@
     }
 
     .su-hero-icon {
-        width: 90px;
-        height: 90px;
-        background: var(--su-yellow);
-        border-radius: 18px;
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         margin: 0 auto 28px;
-        font-size: 46px;
-        color: #1B2A4A;
         box-shadow: 0 6px 24px rgba(249,188,0,.35);
+        overflow: hidden;
+        background: transparent;
+    }
+
+    .su-hero-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
     }
 
     .su-hero h1 {
@@ -165,7 +170,7 @@
 <!-- ── HERO ── -->
 <div class="su-hero">
     <div class="su-hero-icon">
-        <i class="bi bi-mortarboard-fill"></i>
+        <img src="~/images/selcuk_logo.png" alt="Selçuk Üniversitesi" />
     </div>
     <h1>Selçuk Üniversitesi</h1>
     <p class="su-hero-sub">Anket Formları</p>
