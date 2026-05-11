@@ -278,6 +278,14 @@ else
                             </div>
                         }
 
+                        @{
+                            // Yönetim butonları SADECE oluşturan kullanıcıya gösterilir
+                            // (SuperAdmin tüm anketleri yönetebilir, bunu da hesaba kat)
+                            bool canManageThis = survey.IsCreatedByCurrentUser
+                                || Model.PreferSuperAdminSurveyLinks;
+                            var staffController = Model.PreferSuperAdminSurveyLinks ? "SuperAdmin" : "Admin";
+                        }
+
                         @if (survey.Status == "Aktif")
                         {
                             @* Ders Değerlendirme (SurveyType=CourseEvaluation) → OBIS kimlik doğrulama akışı *@
@@ -300,28 +308,27 @@ else
                                 </a>
                             }
                         }
-                        
-                        @if (Model.CanUseStaffSurveyTools)
+
+                        @* YÖNETİM AKSİYONLARI — yalnız oluşturan / SuperAdmin *@
+                        @if (canManageThis)
                         {
-                            var controller = Model.PreferSuperAdminSurveyLinks ? "SuperAdmin" : "Admin";
-                            <a asp-controller="@controller" asp-action="PreviewSurvey" asp-route-id="@survey.Id" class="btn btn-sm btn-outline-info w-100 mb-1">
+                            <a asp-controller="@staffController" asp-action="PreviewSurvey" asp-route-id="@survey.Id"
+                               class="btn btn-sm btn-outline-info w-100 mb-1">
                                 <i class="bi bi-eye"></i> Anketi Önizle
                             </a>
-                        }
 
-                        @if (survey.Status == "Taslak")
-                        {
-                            <span class="badge bg-warning text-dark mb-2">Taslak (Yayında Değil)</span>
-                            @if (Model.CanUseStaffSurveyTools)
+                            @if (survey.Status == "Taslak")
                             {
-                                <a asp-controller="Admin" asp-action="EditSurvey" asp-route-id="@survey.Id" class="btn btn-sm btn-outline-secondary w-100">
-                                    Düzenle
+                                <span class="badge bg-warning text-dark mb-2">Taslak (Yayında Değil)</span>
+                                <a asp-controller="@staffController" asp-action="EditSurvey" asp-route-id="@survey.Id"
+                                   class="btn btn-sm btn-outline-secondary w-100">
+                                    <i class="bi bi-pencil"></i> Düzenle
                                 </a>
                             }
-                        }
-                        else if (survey.Status != "Aktif")
-                        {
-                            <span class="btn-ankete-disabled mb-2">@survey.Status</span>
+                            else if (survey.Status != "Aktif")
+                            {
+                                <span class="btn-ankete-disabled mb-2">@survey.Status</span>
+                            }
                         }
                     </div>
                 </div>

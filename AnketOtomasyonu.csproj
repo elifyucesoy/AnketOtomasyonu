@@ -5,6 +5,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>f1ddd40a-9160-4f3a-ba90-3939b9d97bcc</UserSecretsId>
+    <Authors>Elif Yücesoy</Authors>
+    <Company>Selçuk Üniversitesi</Company>
+    <Product>Anket Otomasyonu</Product>
+    <Description>Selçuk Üniversitesi için geliştirilmiş anket yönetim ve değerlendirme sistemi.</Description>
+    <Copyright>Copyright © 2026 Elif Yücesoy</Copyright>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

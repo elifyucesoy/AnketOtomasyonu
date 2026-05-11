@@ -32,13 +32,24 @@ namespace AnketOtomasyonu.Controllers
             var userRole = User.FindFirstValue(ClaimTypes.Role);
             var isAuth = User.Identity?.IsAuthenticated == true;
             var hasSuperClaim = User.HasAnketPermission(AnketPermissions.SuperAdmin);
+            var isAdmin = User.HasAnketPermission(AnketPermissions.Admin);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
 
             var allSummaries = await _surveyService.GetAllSurveySummariesAsync();
 
+            // SuperAdmin: tüm anketler (her durumda)
+            // Admin: tüm Active+Approved anketler + kendi oluşturduğu anketler (taslak dahil)
+            // Diğer: sadece Active+Approved
             IEnumerable<SurveySummaryDto> filteredSurveys;
-            if (isAuth && User.HasStaffSurveyExtendedCatalogAccess())
+            if (isAuth && hasSuperClaim)
             {
                 filteredSurveys = allSummaries;
+            }
+            else if (isAuth && isAdmin)
+            {
+                filteredSurveys = allSummaries.Where(s =>
+                    (s.Status == SurveyStatus.Active && s.ApprovalStatus == ApprovalStatus.Approved)
+                    || string.Equals(s.CreatedByUserId, currentUserId, StringComparison.Ordinal));
             }
             else
             {
@@ -55,13 +66,17 @@ namespace AnketOtomasyonu.Controllers
 
             if (isAuth)
             {
-                if (User.HasAnketPermission(AnketPermissions.SuperAdmin))
+                if (hasSuperClaim)
                 {
-                    // ANKET_API_SUPER_ADMIN: katalogda kısıt yok
+                    // SuperAdmin: katalogda kısıt yok
+                }
+                else if (isAdmin)
+                {
+                    // Admin: birim kısıtı YOK (tüm üniversite anketlerini görür). Hedef rol filtresi aşağıda uygulanır.
                 }
                 else if (User.HasAnyStaffSurveyPermission())
                 {
-                    // Liste: kendi birim anahtarları (AuthorizedUnits ile başka birimin anketi görünmez)
+                    // Akademik / İdari: kendi birim anahtarları
                     surveys = surveys.Where(s =>
                         string.Equals(s.CreatedByBirim, "MERKEZ", StringComparison.OrdinalIgnoreCase) ||
                         SurveyUnitMatchHelper.MatchesSurveySummary(User, s, targetUnitMap, includeAuthorizedUnits: false));
@@ -72,7 +87,7 @@ namespace AnketOtomasyonu.Controllers
                         SurveyUnitMatchHelper.MatchesSurveySummary(User, s, targetUnitMap, includeAuthorizedUnits: false));
                 }
 
-                if (!User.HasAnketPermission(AnketPermissions.SuperAdmin))
+                if (!hasSuperClaim && !isAdmin)
                 {
                     surveys = surveys.Where(s =>
                         SurveyTargetRoleHelper.TargetRolesAllowUser(s.TargetRoles, User));
@@ -121,7 +136,10 @@ namespace AnketOtomasyonu.Controllers
                     CreatedAt = s.CreatedAt,
                     IsAnonymous = s.IsAnonymous,
                     TargetRoles = s.TargetRoles,
-                    TargetUnits = SurveyTargetUnitsHelper.Resolve(s, targetUnitMap)
+                    TargetUnits = SurveyTargetUnitsHelper.Resolve(s, targetUnitMap),
+                    IsCreatedByCurrentUser = !string.IsNullOrEmpty(currentUserId)
+                        && string.Equals(s.CreatedByUserId, currentUserId, StringComparison.Ordinal),
+                    ApprovalStatus = s.ApprovalStatus
                 }).ToList()
             };
 
