@@ -117,16 +117,11 @@
                 <!-- HEDEF ROLLER -->
                 <div class="col-md-6">
                     <label class="form-label fw-semibold"><i class="bi bi-people me-1" style="color:@accentColor;"></i>Hedef Roller</label>
-                    <small class="text-muted d-block mb-2">
-                        Uzakta <strong>5 ANKET izin kodu</strong> vardır; kullanıcıya bunların <strong>alt kümesi</strong> (ör. 2 veya 3 kod) atanır.
-                        Burada işaretlediğiniz hedef rollerden <strong>biri</strong>, oturumda <strong>olan</strong> kodlarla örtüşürse katılım mümkün (çoklu izin = birden fazla etiket uyumu).
-                        <strong>Personel</strong>: uzak sistemde <strong>ANKET_IDARI</strong> (idari personel). <strong>Birim</strong> ayrı kontrol.
-                    </small>
                     <div class="d-flex gap-3 mt-1 flex-wrap">
-                        @foreach (var role in Model.AvailableRoles)
+                        @foreach (var role in Model.AvailableRoles.Where(r => r != "Admin" && r != "SuperAdmin"))
                         {
-                            var displayLabel = role == "Employee" || role == "Idari" ? "Personel" : role == "Student" ? "Öğrenci" : role == "Akademik" ? "Akademik" : role == "Admin" ? "Admin" : role == "SuperAdmin" ? "Süper Admin" : role;
-                            var roleIcon = role == "Student" ? "bi-mortarboard" : role == "Akademik" ? "bi-journal-text" : role == "Personel" || role == "Idari" || role == "Employee" ? "bi-building-gear" : role == "Admin" ? "bi-shield-check" : role == "SuperAdmin" ? "bi-stars" : "bi-briefcase";
+                            var displayLabel = role == "Employee" || role == "Idari" ? "Personel" : role == "Student" ? "Öğrenci" : role == "Akademik" ? "Akademik" : role;
+                            var roleIcon = role == "Student" ? "bi-mortarboard" : role == "Akademik" ? "bi-journal-text" : role == "Personel" || role == "Idari" || role == "Employee" ? "bi-building-gear" : "bi-briefcase";
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="checkbox" name="TargetRoles" value="@role" id="role_@role"
                                        @(selectedRoles.Contains(role) ? "checked" : null) />
@@ -255,17 +250,25 @@
         </div>
     </div>
 
-    <div class="d-grid mb-5">
-        <button type="submit" class="btn btn-su btn-lg">
-            @if (isEdit)
-            {
-                <text><i class="bi bi-check-circle me-1"></i>Değişiklikleri Kaydet</text>
-            }
-            else
-            {
-                <text><i class="bi bi-check-circle me-1"></i>Anketi Oluştur</text>
-            }
-        </button>
+    <div class="save-survey-box mb-5">
+        <div class="save-survey-inner">
+            <h5 class="save-survey-title mb-2 fw-bold">
+                <i class="bi bi-cloud-check me-2"></i>@(isEdit ? "Değişiklikleri kaydetmek üzeresiniz" : "Anketi oluşturmak üzeresiniz")
+            </h5>
+            <p class="save-survey-desc mb-4">
+                @(isEdit ? "Aşağıdaki butona basarak yaptığınız tüm değişiklikleri kaydedebilirsiniz." : "Aşağıdaki butona basarak anketi taslak olarak kaydedebilirsiniz.")
+            </p>
+            <button type="submit" class="save-survey-btn">
+                @if (isEdit)
+                {
+                    <text><i class="bi bi-check2-circle me-2"></i>Değişiklikleri Kaydet</text>
+                }
+                else
+                {
+                    <text><i class="bi bi-plus-circle me-2"></i>Anketi Oluştur</text>
+                }
+            </button>
+        </div>
     </div>
 </form>
 
@@ -313,18 +316,57 @@
             @:.question-card { border-color: #bfdbfe !important; }
         }
 
+        /* ── Kaydet kutusu — tüm temalarda görünür ── */
+        .save-survey-box {
+            border-radius: 16px;
+            padding: 4px;
+            box-shadow: 0 8px 30px rgba(0,0,0,.12);
+        }
+        .save-survey-inner {
+            border-radius: 12px;
+            padding: 32px 28px;
+            text-align: center;
+        }
+        .save-survey-title { font-size: 1.15rem; margin: 0; }
+        .save-survey-desc { font-size: .9rem; margin: 0; opacity: .85; }
+        .save-survey-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 1.05rem; font-weight: 800;
+            padding: 14px 42px;
+            border: none; border-radius: 30px;
+            letter-spacing: .4px; cursor: pointer;
+            transition: transform .12s, box-shadow .12s, background .15s;
+        }
+        .save-survey-btn:hover { transform: translateY(-2px); }
+        .save-survey-btn:active { transform: translateY(0); }
+
         @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
         {
-            @:/* ── SuperAdmin renk teması (mor) ── */
-            @:.cs-card-header-primary { background: linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%); }
-            @:.cs-card-header-secondary { background: linear-gradient(135deg,#9333ea 0%,#7c3aed 100%); }
+            @:/* ── SuperAdmin renk teması (lacivert + mor + gold) ── */
+            @:.cs-card-header-primary { background: linear-gradient(135deg,#0f172a 0%,#1e293b 100%); border-bottom: 3px solid #7c3aed; }
+            @:.cs-card-header-secondary { background: linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%); }
             @:.btn-outline-primary { color: #7c3aed !important; border-color: #7c3aed !important; }
             @:.btn-outline-primary:hover { background: #7c3aed !important; border-color: #7c3aed !important; color: #fff !important; }
+            @:.save-survey-box { background: linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%); }
+            @:.save-survey-inner { background: linear-gradient(135deg,#0f172a 0%,#1e293b 100%); }
+            @:.save-survey-title { color: #f59e0b; }
+            @:.save-survey-desc { color: rgba(255,255,255,.75); }
+            @:.save-survey-btn { background: #f59e0b; color: #0f172a; box-shadow: 0 6px 18px rgba(245,158,11,.45); }
+            @:.save-survey-btn:hover { background: #fbbf24; box-shadow: 0 8px 24px rgba(245,158,11,.6); color:#0f172a; }
         }
         else
         {
-            @:.cs-card-header-primary { background: linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%); }
-            @:.cs-card-header-secondary { background: linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%); }
+            @:/* ── Admin renk teması (lacivert + sarı) ── */
+            @:.cs-card-header-primary { background: linear-gradient(135deg,#1B2A4A 0%,#142038 100%); border-bottom: 3px solid #F9BC00; }
+            @:.cs-card-header-secondary { background: linear-gradient(135deg,#1B2A4A 0%,#2c3e6a 100%); }
+            @:.btn-outline-primary { color:#1B2A4A !important; border-color:#1B2A4A !important; }
+            @:.btn-outline-primary:hover { background:#1B2A4A !important; border-color:#1B2A4A !important; color:#fff !important; }
+            @:.save-survey-box { background: linear-gradient(135deg,#F9BC00 0%,#e0ab00 100%); }
+            @:.save-survey-inner { background: linear-gradient(135deg,#1B2A4A 0%,#142038 100%); }
+            @:.save-survey-title { color: #F9BC00; }
+            @:.save-survey-desc { color: rgba(255,255,255,.75); }
+            @:.save-survey-btn { background: #F9BC00; color: #1B2A4A; box-shadow: 0 6px 18px rgba(249,188,0,.5); }
+            @:.save-survey-btn:hover { background: #ffd23f; box-shadow: 0 8px 24px rgba(249,188,0,.65); color:#1B2A4A; }
         }
     </style>
 }

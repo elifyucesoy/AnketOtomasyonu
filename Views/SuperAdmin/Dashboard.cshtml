@@ -261,6 +261,21 @@
                                     <span class="badge @s.ApprovalBadgeClass" title="@s.ApprovalNote">
                                         @s.ApprovalLabel
                                     </span>
+                                    @if (s.ApprovalStatus == ApprovalStatus.Rejected && !string.IsNullOrEmpty(s.ApprovalNote))
+                                    {
+                                        <span class="ms-1 text-danger rejection-note-btn"
+                                              data-bs-toggle="popover"
+                                              data-bs-placement="left"
+                                              data-bs-trigger="hover focus"
+                                              data-bs-title="Ret Sebebi"
+                                              data-bs-content="@s.ApprovalNote"
+                                              tabindex="0"
+                                              role="button"
+                                              title="Ret sebebini gör"
+                                              style="cursor:help;">
+                                            <i class="bi bi-exclamation-circle-fill"></i>
+                                        </span>
+                                    }
                                 </td>
                                 <td>@s.QuestionCount</td>
                                 <td>@s.ResponseCount</td>
@@ -504,6 +519,11 @@
 
 @section Scripts {
     <script>
+        // Reddedilen anketler için "Ret sebebini gör" popover'ını başlat
+        document.querySelectorAll('.rejection-note-btn').forEach(function (el) {
+            new bootstrap.Popover(el, { html: false });
+        });
+
         document.body.addEventListener('click', function (e) {
             var btn = e.target.closest('.js-copy-survey-url');
             if (!btn) return;

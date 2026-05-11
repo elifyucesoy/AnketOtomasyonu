@@ -222,12 +222,12 @@
 }
 else
 {
-    <div class="row g-4">
+    <div class="row g-4 justify-content-center">
         @foreach (var survey in Model.Surveys)
         {
             <div class="col-md-6 col-lg-4">
                 <div class="card survey-card shadow-sm">
-                    <div class="card-body d-flex flex-column">
+                    <div class="card-body d-flex flex-column text-center">
                         <div class="d-flex justify-content-between align-items-start mb-1">
                             <span class="anon-badge">
                                 <i class="bi bi-shield-check"></i> Anonim
@@ -247,19 +247,26 @@ else
                                 <div class="small fw-semibold text-muted mb-2" style="font-size:0.75rem;">
                                     <i class="bi bi-bullseye me-1"></i>Hedef birimler
                                 </div>
-                                <div class="d-flex flex-wrap gap-1">
-                                    @foreach (var u in survey.TargetUnits.Take(12))
+                                <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                    @if (survey.TargetUnits.Count >= 20)
                                     {
-                                        <span class="badge rounded-pill bg-light text-dark border" style="font-size:0.72rem;">@u</span>
+                                        <span class="badge rounded-pill bg-light text-dark border" style="font-size:0.72rem;">Tüm birimler</span>
                                     }
-                                    @if (survey.TargetUnits.Count > 12)
+                                    else
                                     {
-                                        <span class="small text-muted align-self-center">+@(survey.TargetUnits.Count - 12)</span>
+                                        @foreach (var u in survey.TargetUnits.Take(12))
+                                        {
+                                            <span class="badge rounded-pill bg-light text-dark border" style="font-size:0.72rem;">@u</span>
+                                        }
+                                        @if (survey.TargetUnits.Count > 12)
+                                        {
+                                            <span class="small text-muted align-self-center">+@(survey.TargetUnits.Count - 12)</span>
+                                        }
                                     }
                                 </div>
                             </div>
                         }
-                        <div class="survey-meta">
+                        <div class="survey-meta justify-content-center">
                             <div class="survey-meta-item">
                                 <i class="bi bi-question-circle"></i>
                                 @survey.QuestionCount soru
