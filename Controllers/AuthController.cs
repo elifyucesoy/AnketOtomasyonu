@@ -70,7 +70,7 @@ namespace AnketOtomasyonu.Controllers
         }
 
         // ─── POST: Login ─────────────────────────────────────────────────────────
-        [HttpPost]
+        [HttpPost]  
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
         {
@@ -93,7 +93,8 @@ namespace AnketOtomasyonu.Controllers
                 var bearerToken = $"Bearer {accessToken}";
 
                 // ── ADIM 2: GetProfile → kullanıcı bilgilerini ve unitIds'i al ──
-                var profile = await GetProfileAsync(baseUrl, bearerToken);
+                var (profile, birimFromProfileJson, institutionalJobFromProfile) =
+                    await GetProfileAsync(baseUrl, bearerToken);
                 if (profile is null)
                 {
                     ViewBag.Error = "Kullanıcı profili alınamadı.";
@@ -114,29 +115,40 @@ namespace AnketOtomasyonu.Controllers
                     return View(model);
                 }
 
-                // ── ADIM 4: UnitIds → Unit bilgilerini çek (cache'den) ────────────
+                // ── ADIM 4: UnitIds → UnitList/cache + eksikler için UnitById (SuperAdmin ile aynı mantık; gerekirse System User)
                 List<UnitDto> userUnits = new();
                 if (profile.UnitIds?.Any() == true)
                 {
-                    // UnitList'i cache'le (30 gün), kullanıcının birimlerini filtrele
-                    userUnits = await _unitApiService.GetUnitsByIdsAsync(profile.UnitIds, accessToken);
-                    _logger.LogInformation("[LOGIN] {U} → {N} birim bulundu (unitIds: {Ids})",
-                        profile.Username, userUnits.Count, string.Join(",", profile.UnitIds));
+                    var distinctCount = profile.UnitIds.Count(id => id > 0);
+                    userUnits = await _unitApiService.ResolveProfileUnitIdsAsync(profile.UnitIds, accessToken);
+                    _logger.LogInformation(
+                        "[LOGIN] {U} → {Resolved}/{Distinct} birim çözüldü (UnitList + UnitById; unitIds: {Ids})",
+                        profile.Username, userUnits.Count, distinctCount, string.Join(",", profile.UnitIds));
                 }
 
-                // ── ADIM 5: Rol belirleme ─────────────────────────────────────────
-                string role    = "";
-                string jobType = "";
-                int userTypeId = 0;
+                // ── ADIM 5: UI ana rol (izin önceliği) + öğrenci tipi (GetProfile öncelikli) + kurumsal personel tipi (anket hedefi; izinlerden bağımsız)
+                string role = "";
+                string jobType;
 
-                if      (granted.Contains(AnketPermissions.SuperAdmin)) { role = "SuperAdmin"; jobType = "Akademik"; }
-                else if (granted.Contains(AnketPermissions.Admin))      { role = "Admin";      jobType = "Akademik"; }
-                else if (granted.Contains(AnketPermissions.Akademik))   { role = "Akademik";   jobType = "Akademik"; }
-                else if (granted.Contains(AnketPermissions.Idari))      { role = "Employee";   jobType = "Idari"; }
-                else if (granted.Contains(AnketPermissions.Student))    { role = "Student";    userTypeId = 1; }
+                if      (granted.Contains(AnketPermissions.SuperAdmin)) role = "SuperAdmin";
+                else if (granted.Contains(AnketPermissions.Admin))      role = "Admin";
+                else if (granted.Contains(AnketPermissions.Akademik))   role = "Akademik";
+                else if (granted.Contains(AnketPermissions.Idari))      role = "Employee";
+                else if (granted.Contains(AnketPermissions.Student))    role = "Student";
+
+                var userTypeId = profile.UserTypeId;
+                if (userTypeId != 1 && granted.Contains(AnketPermissions.Student))
+                    userTypeId = 1;
+
+                jobType = BuildInstitutionalJobRecordClaim(profile, institutionalJobFromProfile);
 
                 // ── ADIM 6: Admin ise DB'den yetkili birimleri al ─────────────────
-                string personelBirim = userUnits.FirstOrDefault()?.Name ?? "";
+                // Birim adı: önce GetProfile→UnitIds→UnitList (herkes için aynı), sonra model/JSON — fiili birim
+                var birimFromModel = profile.ResolvedBirimOrUnit;
+                string personelBirim = userUnits.FirstOrDefault()?.Name
+                    ?? birimFromModel
+                    ?? birimFromProfileJson
+                    ?? "";
                 List<string>? authorizedUnits = null;
 
                 if (role == "Admin")
@@ -154,7 +166,9 @@ namespace AnketOtomasyonu.Controllers
                             .GroupBy(x => x.ToUpper(tr))
                             .Select(g => g.First())
                             .ToList();
-                        personelBirim = authorizedUnits.First();
+                        // Yetkili birimler yalnızca AuthorizedUnits claim'inde; PersonelBirim = GetProfile fiili birim (anket birimi)
+                        if (string.IsNullOrWhiteSpace(personelBirim))
+                            personelBirim = authorizedUnits[0];
                     }
                 }
 
@@ -167,7 +181,10 @@ namespace AnketOtomasyonu.Controllers
                     granted,
                     userUnits,
                     authorizedUnits,
-                    accessToken);
+                    accessToken,
+                    profile.UnitIds,
+                    profile.FakulteAdi,
+                    profile.BolumAdi);
 
                 _logger.LogInformation("[LOGIN-OK] {User} → Rol:{Role} Birim:{Birim}",
                     profile.Username, role, personelBirim);
@@ -190,12 +207,17 @@ namespace AnketOtomasyonu.Controllers
         }
 
         // ─── Logout ──────────────────────────────────────────────────────────────
+        // SuperAdmin / Admin / Akademik panelinden çıkışta doğrudan anonim
+        // anket listesi (/Home/Index) sayfasına yönlendirilir; eski "Login"
+        // davranışı kaldırılmıştır. Home/Index [AllowAnonymous] olduğundan
+        // erişim için yeniden giriş zorunlu değildir.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Login");
+            HttpContext.Session.Clear();
+            return RedirectToAction("Index", "Home");
         }
 
         [HttpGet]
@@ -231,8 +253,9 @@ namespace AnketOtomasyonu.Controllers
             catch (Exception ex) { _logger.LogError(ex, "[LOGIN-API] Hata"); return null; }
         }
 
-        /// GET /api/v1/Auth/GetProfile → CurrentUser (unitIds dahil) veya null
-        private async Task<CurrentUser?> GetProfileAsync(string baseUrl, string bearer)
+        /// GET /api/v1/Auth/GetProfile → CurrentUser + JSON içinden birim metni (Endpoint her zaman aynı property dönmeyebilir).
+        private async Task<(CurrentUser? profile, string? birimFromJson, string? institutionalJobRaw)> GetProfileAsync(
+            string baseUrl, string bearer)
         {
             try
             {
@@ -244,17 +267,134 @@ namespace AnketOtomasyonu.Controllers
                 var raw  = await resp.Content.ReadAsStringAsync();
                 _logger.LogDebug("[PROFILE-API] {Status} {Body}", resp.StatusCode, raw);
 
-                if (!resp.IsSuccessStatusCode) return null;
+                if (!resp.IsSuccessStatusCode) return (null, null, null);
 
                 var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var doc  = JsonSerializer.Deserialize<JsonElement>(raw, opts);
+                using var jsonDoc = JsonDocument.Parse(raw);
+                var root = jsonDoc.RootElement;
+                var valueEl = root.TryGetProperty("value", out var val) && val.ValueKind == JsonValueKind.Object
+                    ? val
+                    : root;
 
-                if (doc.TryGetProperty("value", out var val) && val.ValueKind == JsonValueKind.Object)
-                    return val.Deserialize<CurrentUser>(opts);
+                var profile = JsonSerializer.Deserialize<CurrentUser>(valueEl.GetRawText(), opts);
+                var birimJson = ExtractBirimFromProfileElement(valueEl);
 
-                return doc.Deserialize<CurrentUser>(opts);
+                if (string.IsNullOrWhiteSpace(birimJson) && profile != null)
+                    birimJson = profile.ResolvedBirimOrUnit;
+
+                var institutionalJobRaw = ExtractJobRecordTypeFromProfileElement(valueEl);
+
+                return (profile, birimJson, institutionalJobRaw);
             }
-            catch (Exception ex) { _logger.LogError(ex, "[PROFILE-API] Hata"); return null; }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[PROFILE-API] Hata");
+                return (null, null, null);
+            }
+        }
+
+        /// <summary>GetProfile JSON’dan kurumsal personel tipi (ANKET_* ile karıştırılmaz).</summary>
+        private static string? ExtractJobRecordTypeFromProfileElement(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.Object) return null;
+
+            foreach (var p in el.EnumerateObject())
+            {
+                if (!IsJobRecordJsonProperty(p.Name)) continue;
+                if (p.Value.ValueKind == JsonValueKind.String)
+                {
+                    var s = p.Value.GetString()?.Trim();
+                    if (!string.IsNullOrEmpty(s)) return s;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsJobRecordJsonProperty(string name) =>
+            name.Equals("jobRecordType", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("personelJobrecordtipi", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("personelJobRecordTipi", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("jobRecordTipi", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("jobrecordtipi", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("personelTipi", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("jobRecord", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Cookie <c>JobRecordType</c>: öğrenci boş; personel için API metni veya varsayılan akademik kadro (Idari yalnızca API açıkça idari diyorsa).
+        /// </summary>
+        private static string BuildInstitutionalJobRecordClaim(CurrentUser profile, string? rawFromApi)
+        {
+            if (profile.UserTypeId == 1)
+                return "";
+
+            if (!string.IsNullOrWhiteSpace(rawFromApi))
+                return NormalizeInstitutionalJobRecord(rawFromApi);
+
+            return "Akademik";
+        }
+
+        private static string NormalizeInstitutionalJobRecord(string raw)
+        {
+            var s = raw.Trim();
+            if (s.Length == 0) return "Akademik";
+
+            if (s.Contains("idari", StringComparison.OrdinalIgnoreCase)
+                || s.Equals("Idari", StringComparison.OrdinalIgnoreCase)
+                || s.Contains("İdari", StringComparison.OrdinalIgnoreCase))
+                return "Idari";
+
+            return "Akademik";
+        }
+
+        /// <summary>GetProfile value nesnesinden birim/fakülte metnini çıkarır (Swagger dışı varyasyonlar için).</summary>
+        private static string? ExtractBirimFromProfileElement(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.Object) return null;
+
+            foreach (var key in new[]
+                     {
+                         "birimAdi", "birimName", "birim", "unitName", "personelBirim",
+                         "organizationUnitName", "departmentName", "department",
+                         "facultyName", "fakulteAdi", "netBirim", "fiiliBirim", "corporateUnitName"
+                     })
+            {
+                foreach (var p in el.EnumerateObject())
+                {
+                    if (!p.Name.Equals(key, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (p.Value.ValueKind == JsonValueKind.String)
+                    {
+                        var s = p.Value.GetString()?.Trim();
+                        if (!string.IsNullOrWhiteSpace(s)) return s;
+                    }
+                    // { "unit": { "name": "..." } }
+                    if (p.Value.ValueKind == JsonValueKind.Object &&
+                        p.Value.TryGetProperty("name", out var nm) &&
+                        nm.ValueKind == JsonValueKind.String)
+                    {
+                        var s = nm.GetString()?.Trim();
+                        if (!string.IsNullOrWhiteSpace(s)) return s;
+                    }
+                }
+            }
+
+            if (el.TryGetProperty("units", out var units) && units.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in units.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object) continue;
+                    foreach (var nameKey in new[] { "name", "title", "displayName" })
+                    {
+                        if (item.TryGetProperty(nameKey, out var nm) && nm.ValueKind == JsonValueKind.String)
+                        {
+                            var s = nm.GetString()?.Trim();
+                            if (!string.IsNullOrWhiteSpace(s)) return s;
+                        }
+                    }
+                }
+            }
+
+            return null;
         }
 
         /// POST /api/v1/Permission/HasPermission
@@ -289,7 +429,10 @@ namespace AnketOtomasyonu.Controllers
             IReadOnlyCollection<string> grantedPermissions,
             List<UnitDto> userUnits,
             List<string>? authorizedUnits = null,
-            string? accessToken = null)
+            string? accessToken = null,
+            ICollection<int>? profileUnitIds = null,
+            string? fakulteAdiFromProfile = null,
+            string? bolumAdiFromProfile = null)
         {
             var claims = new List<Claim>
             {
@@ -319,6 +462,25 @@ namespace AnketOtomasyonu.Controllers
                 if (!string.IsNullOrEmpty(unit.UnitTypeName))
                     claims.Add(new Claim("UnitTypeName", unit.UnitTypeName));
             }
+
+            // UnitList senkronu / eşleşme boşsa: GetProfile'daki unitIds + birim metni ile yine UnitId zinciri (ANKET_IDARI / personel)
+            if (userUnits.Count == 0 && profileUnitIds?.Count > 0)
+            {
+                var nameFallback = personelBirim;
+                foreach (var uid in profileUnitIds.Distinct())
+                {
+                    claims.Add(new Claim("UnitId", uid.ToString()));
+                    if (!string.IsNullOrWhiteSpace(nameFallback))
+                        claims.Add(new Claim("UnitName", nameFallback));
+                }
+                _logger.LogInformation("[LOGIN] UnitList eşleşmesi yok; {N} adet UnitId doğrudan profile.UnitIds ile yazıldı.", profileUnitIds.Count);
+            }
+
+            if (!string.IsNullOrWhiteSpace(fakulteAdiFromProfile))
+                claims.Add(new Claim("FakulteAdi", fakulteAdiFromProfile.Trim()));
+
+            if (!string.IsNullOrWhiteSpace(bolumAdiFromProfile))
+                claims.Add(new Claim("BolumAdi", bolumAdiFromProfile.Trim()));
 
             // Admin yetkili birimleri (DB'den)
             if (authorizedUnits?.Count > 0)

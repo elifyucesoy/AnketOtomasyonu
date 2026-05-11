@@ -241,6 +241,24 @@ else
                         {
                             <p class="card-text">@survey.Description</p>
                         }
+                        @if (survey.TargetUnits.Count > 0)
+                        {
+                            <div class="mb-3">
+                                <div class="small fw-semibold text-muted mb-2" style="font-size:0.75rem;">
+                                    <i class="bi bi-bullseye me-1"></i>Hedef birimler
+                                </div>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @foreach (var u in survey.TargetUnits.Take(12))
+                                    {
+                                        <span class="badge rounded-pill bg-light text-dark border" style="font-size:0.72rem;">@u</span>
+                                    }
+                                    @if (survey.TargetUnits.Count > 12)
+                                    {
+                                        <span class="small text-muted align-self-center">+@(survey.TargetUnits.Count - 12)</span>
+                                    }
+                                </div>
+                            </div>
+                        }
                         <div class="survey-meta">
                             <div class="survey-meta-item">
                                 <i class="bi bi-question-circle"></i>

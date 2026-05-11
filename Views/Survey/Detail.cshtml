@@ -15,9 +15,18 @@
         }
         <small class="text-muted">@Model.CreatedByName | @Model.CreatedAt.ToString("dd.MM.yyyy")</small>
     </div>
-    <a asp-controller="Admin" asp-action="Dashboard" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Geri
-    </a>
+    @if (User.HasSuperAdminAccess())
+    {
+        <a asp-controller="SuperAdmin" asp-action="Dashboard" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </a>
+    }
+    else
+    {
+        <a asp-controller="Admin" asp-action="Dashboard" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Geri
+        </a>
+    }
 </div>
 
 <div class="row g-3 mb-4">
@@ -37,10 +46,23 @@
         <div class="card border-0 shadow-sm text-center py-3">
             <small class="text-muted">Hedef</small><br />
             @{
+                string MapRoleLabel(string r)
+                {
+                    r = r.Trim();
+                    return r switch
+                    {
+                        "Employee" => "Personel",
+                        "Student" => "Öğrenci",
+                        "Akademik" => "Akademik",
+                        "Idari" => "Personel",
+                        "Admin" => "Admin",
+                        "SuperAdmin" => "Süper Admin",
+                        _ => r.StartsWith("ANKET_", StringComparison.OrdinalIgnoreCase) ? r : r
+                    };
+                }
                 var rolesDisplay = string.IsNullOrEmpty(Model.TargetRoles)
                     ? "Herkes"
-                    : string.Join(", ", Model.TargetRoles.Split(',')
-                        .Select(r => r.Trim() == "Employee" ? "Personel" : r.Trim() == "Student" ? "Öğrenci" : r.Trim()));
+                    : string.Join(", ", Model.TargetRoles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(MapRoleLabel));
             }
             <strong>@rolesDisplay</strong>
         </div>
@@ -60,7 +82,7 @@
     </div>
 }
 
-@if (Model.Status == "Taslak")
+@if (Model.Status == "Taslak" && Model.CanManageSurvey)
 {
     <form asp-controller="Survey" asp-action="Publish" asp-route-id="@Model.Id" method="post" class="mb-4">
         @Html.AntiForgeryToken()

@@ -1,24 +1,77 @@
+@using AnketOtomasyonu.Authorization
 @using AnketOtomasyonu.Models.ViewModels
 @using AnketOtomasyonu.Models.Entities
 @model SurveyCreateViewModel
 @{
-    ViewData["Title"] = "Yeni Anket Oluştur";
+    var formController = ViewBag.FormController as string ?? "Admin";
+    if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+    {
+        Layout = "~/Views/Shared/_SuperAdminLayout.cshtml";
+    }
+    var editSurveyId = ViewBag.SurveyId as int?;
+    bool isEdit = editSurveyId.HasValue;
+    ViewData["Title"] = isEdit ? "Anketi Düzenle" : "Yeni Anket Oluştur";
+    var surveyStatus = ViewBag.SurveyStatus as SurveyStatus?;
+    var selectedRoles = ViewBag.SelectedRoles as List<string> ?? new List<string>();
+    var preselectedFacJson = System.Text.Json.JsonSerializer.Serialize(ViewBag.SelectedTargetFaculties as List<string> ?? new List<string>());
+    var existingQuestionsPayload = "null";
+    if (isEdit && ViewBag.ExistingQuestions != null)
+        existingQuestionsPayload = System.Text.Json.JsonSerializer.Serialize(ViewBag.ExistingQuestions);
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
-        <h2 class="mb-0"><i class="bi bi-plus-circle me-2" style="color:#2563eb;"></i>Yeni Anket Oluştur</h2>
-        <small class="text-muted">Sorularınızı ekleyin ve anketi kaydedin</small>
+        @{
+            var accentColor = string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase) ? "#7c3aed" : "#2563eb";
+        }
+        @if (isEdit)
+        {
+            <h2 class="mb-0"><i class="bi bi-pencil-square me-2" style="color:@accentColor;"></i>Anketi Düzenle</h2>
+            <small class="text-muted">Anket bilgilerini ve soruları güncelleyin</small>
+        }
+        else
+        {
+            <h2 class="mb-0"><i class="bi bi-plus-circle me-2" style="color:@accentColor;"></i>Yeni Anket Oluştur</h2>
+            <small class="text-muted">Sorularınızı ekleyin ve anketi kaydedin</small>
+        }
     </div>
-    <a asp-action="Dashboard" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Geri</a>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        @if (isEdit && surveyStatus.HasValue && (surveyStatus == SurveyStatus.Closed || surveyStatus == SurveyStatus.Inactive || surveyStatus == SurveyStatus.Draft))
+        {
+            <form asp-controller="@formController" asp-action="Republish" asp-route-id="@editSurveyId" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-success btn-sm"
+                        onclick="return confirm('Anket tekrar yayınlansın mı?')">
+                    <i class="bi bi-broadcast me-1"></i>Tekrar Yayınla
+                </button>
+            </form>
+        }
+        @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+        {
+            <a asp-controller="SuperAdmin" asp-action="Dashboard" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Geri</a>
+        }
+        else
+        {
+            <a asp-controller="Admin" asp-action="Dashboard" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Geri</a>
+        }
+    </div>
 </div>
 
-<form asp-action="CreateSurvey" method="post" id="createSurveyForm">
+@if (isEdit && surveyStatus == SurveyStatus.Active)
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        Bu anket şu an <strong>aktif</strong>. Kaydettiğinizde güncellenir; geçmiş cevaplar silinir.
+    </div>
+}
+
+<form action="@(isEdit ? Url.Action("EditSurvey", formController, new { id = editSurveyId }) : Url.Action("CreateSurvey", formController))"
+      method="post" id="createSurveyForm">
     @Html.AntiForgeryToken()
 
     <!-- ANKET BİLGİLERİ -->
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header py-3" style="background: linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%);">
+        <div class="card-header py-3 cs-card-header-primary">
             <h5 class="mb-0 text-white"><i class="bi bi-info-circle me-2"></i>Anket Bilgileri</h5>
         </div>
         <div class="card-body">
@@ -32,6 +85,26 @@
                     <label asp-for="Description" class="form-label fw-semibold">Açıklama</label>
                     <textarea asp-for="Description" class="form-control" rows="3" placeholder="Anketin amacını kısaca açıklayınız..."></textarea>
                 </div>
+                @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="col-md-6">
+                        <label asp-for="SurveyType" class="form-label fw-semibold">
+                            <i class="bi bi-diagram-3 me-1" style="color:@accentColor;"></i>Anket Tipi
+                        </label>
+                        <select asp-for="SurveyType" class="form-select" id="surveyTypeSelect">
+                            <option value="0">Normal Anket</option>
+                            <option value="1">Ders Değerlendirme (OBIS Entegrasyonu)</option>
+                        </select>
+                        <small class="text-muted d-block mt-1">
+                            <strong>Ders Değerlendirme</strong> seçilirse öğrenciler OBIS kimlik doğrulama ile giriş yapar ve ders listesinden seçim yapar.
+                        </small>
+                    </div>
+                }
+                else
+                {
+                    <input type="hidden" asp-for="SurveyType" value="0" />
+                }
+
                 <div class="col-md-6">
                     <label asp-for="StartDate" class="form-label fw-semibold"><i class="bi bi-calendar-check me-1 text-success"></i>Başlangıç Tarihi</label>
                     <input asp-for="StartDate" class="form-control" type="date" id="startDate" onclick="if(typeof this.showPicker === 'function') this.showPicker();" />
@@ -43,14 +116,20 @@
 
                 <!-- HEDEF ROLLER -->
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold"><i class="bi bi-people me-1" style="color:#2563eb;"></i>Hedef Roller</label>
+                    <label class="form-label fw-semibold"><i class="bi bi-people me-1" style="color:@accentColor;"></i>Hedef Roller</label>
+                    <small class="text-muted d-block mb-2">
+                        Uzakta <strong>5 ANKET izin kodu</strong> vardır; kullanıcıya bunların <strong>alt kümesi</strong> (ör. 2 veya 3 kod) atanır.
+                        Burada işaretlediğiniz hedef rollerden <strong>biri</strong>, oturumda <strong>olan</strong> kodlarla örtüşürse katılım mümkün (çoklu izin = birden fazla etiket uyumu).
+                        <strong>Personel</strong>: uzak sistemde <strong>ANKET_IDARI</strong> (idari personel). <strong>Birim</strong> ayrı kontrol.
+                    </small>
                     <div class="d-flex gap-3 mt-1 flex-wrap">
                         @foreach (var role in Model.AvailableRoles)
                         {
-                            var displayLabel = role == "Employee" ? "Personel" : role == "Student" ? "Öğrenci" : role;
-                            var roleIcon = role == "Student" ? "bi-mortarboard" : "bi-briefcase";
+                            var displayLabel = role == "Employee" || role == "Idari" ? "Personel" : role == "Student" ? "Öğrenci" : role == "Akademik" ? "Akademik" : role == "Admin" ? "Admin" : role == "SuperAdmin" ? "Süper Admin" : role;
+                            var roleIcon = role == "Student" ? "bi-mortarboard" : role == "Akademik" ? "bi-journal-text" : role == "Personel" || role == "Idari" || role == "Employee" ? "bi-building-gear" : role == "Admin" ? "bi-shield-check" : role == "SuperAdmin" ? "bi-stars" : "bi-briefcase";
                             <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="checkbox" name="TargetRoles" value="@role" id="role_@role" />
+                                <input class="form-check-input" type="checkbox" name="TargetRoles" value="@role" id="role_@role"
+                                       @(selectedRoles.Contains(role) ? "checked" : null) />
                                 <label class="form-check-label" for="role_@role">
                                     <i class="bi @roleIcon me-1"></i>@displayLabel
                                 </label>
@@ -61,7 +140,7 @@
 
                 <!-- ANONİM -->
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold"><i class="bi bi-shield-check me-1" style="color:#7c3aed;"></i>Gizlilik</label>
+                    <label class="form-label fw-semibold"><i class="bi bi-shield-check me-1" style="color:@accentColor;"></i>Gizlilik</label>
                     <div class="form-check mt-1 p-3 rounded" style="background:#f5f3ff; border:1px solid #ede9fe;">
                         <input asp-for="IsAnonymous" class="form-check-input" />
                         <label asp-for="IsAnonymous" class="form-check-label fw-semibold">Anonim Anket</label>
@@ -69,31 +148,96 @@
                     </div>
                 </div>
 
-                <!-- ANKETİ YAYINLAYAN BİRİM -->
-                <div class="col-12">
-                    <label class="form-label fw-semibold"><i class="bi bi-building me-1" style="color:#2563eb;"></i>Anketi Yayınlayan Birim <span class="text-danger">*</span></label>
-                    <select name="CreatedByBirim" id="createdByBirim" class="form-select">
-                        @if (Model.AuthorizedUnits != null && Model.AuthorizedUnits.Any())
-                        {
-                            foreach (var birim in Model.AuthorizedUnits)
+                <!-- BİRİM SEÇİMİ -->
+                @{
+                    var unitListVb = ViewBag.UnitList as List<AnketOtomasyonu.Models.Entities.CachedUnit>;
+                    bool useSuperAdminUnitUi = string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
+                    bool hasDbUnits = unitListVb != null && unitListVb.Count > 0;
+                }
+
+                @if (useSuperAdminUnitUi && hasDbUnits)
+                {
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">
+                            <i class="bi bi-building me-1" style="color:@accentColor;"></i>Hedef birimler <span class="text-danger">*</span>
+                        </label>
+                        <small class="text-muted d-block mb-2">Birden fazla seçebilirsiniz. «Tüm birimler» seçildiğinde forma yalnızca tek bir işaret gönderilir; tam birim listesi sunucuda üretilir (istek boyutu sınırına takılmaz). Tek birimde anket o birime bağlanır; çoklu / tümünde oluşturan birim <strong>MERKEZ</strong>.</small>
+                        <select id="superAdminUnitSelect" name="TargetFaculties" multiple="multiple" class="form-select select2-unit-multi" style="width:100%;">
+                            <option value="__ALL__">Tüm birimler</option>
+                            @foreach (var u in unitListVb!)
                             {
-                                <option value="@birim" selected="@(Model.SelectedBirim == birim ? "selected" : null)">@birim</option>
+                                <option value="@u.Name" data-unit-id="@u.Id">@u.Name</option>
                             }
-                        }
-                        else
-                        {
-                            <option value="MERKEZ">MERKEZ (Tüm Birimler)</option>
-                        }
-                    </select>
-                    <small class="text-muted">Anket bu birim adına yayınlanacak.</small>
-                </div>
+                            @{
+                                /* Düzenleme modunda SurveyBirim'de kayıtlı olup CachedUnit'te bulunmayan
+                                   birimleri de ekle — yoksa Select2 .val() bunları seçemiyor. */
+                                var _preselected = ViewBag.SelectedTargetFaculties as List<string> ?? new List<string>();
+                                var _cachedNames = new HashSet<string>(unitListVb!.Select(u => u.Name), StringComparer.OrdinalIgnoreCase);
+                                foreach (var _m in _preselected.Where(n => !string.IsNullOrWhiteSpace(n) && n != "__ALL__" && !_cachedNames.Contains(n)))
+                                {
+                                    <option value="@_m">@_m</option>
+                                }
+                            }
+                        </select>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectAllUnits"><i class="bi bi-check2-all me-1"></i>Tüm birimleri seç</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearUnits"><i class="bi bi-x-lg me-1"></i>Temizle</button>
+                        </div>
+                        <input type="hidden" name="CreatedByBirim" id="hiddenCreatedByBirim" value="" autocomplete="off" />
+                        <input type="hidden" name="UnitId" id="hiddenUnitId" value="" autocomplete="off" />
+                        <input type="hidden" name="UnitName" id="hiddenUnitName" value="" autocomplete="off" />
+                    </div>
+                }
+                else if (!useSuperAdminUnitUi && Model.AuthorizedUnits != null && Model.AuthorizedUnits.Count > 1)
+                {
+                    <div class="col-12">
+                        <label class="form-label fw-semibold"><i class="bi bi-building me-1" style="color:@accentColor;"></i>Hedef birimler <span class="text-danger">*</span></label>
+                        <small class="text-muted d-block mb-2">Yetkili birimlerinizden seçin. «Tüm birimler» seçildiğinde forma tek işaret gider; yetkili birimleriniz sunucuda tam listelenir.</small>
+                        <select id="adminMultiUnitSelect" name="TargetFaculties" multiple="multiple" class="form-select select2-admin-units" style="width:100%;">
+                            <option value="__ALL__">Tüm birimler</option>
+                            @foreach (var birim in Model.AuthorizedUnits)
+                            {
+                                <option value="@birim">@birim</option>
+                            }
+                        </select>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnAdminSelectAllUnits"><i class="bi bi-check2-all me-1"></i>Tümünü seç</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAdminClearUnits"><i class="bi bi-x-lg me-1"></i>Temizle</button>
+                        </div>
+                        <input type="hidden" name="CreatedByBirim" id="hiddenAdminCreatedByBirim" value="" autocomplete="off" />
+                        <input type="hidden" name="UnitId" value="" />
+                        <input type="hidden" name="UnitName" value="" />
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12">
+                        <label class="form-label fw-semibold"><i class="bi bi-building me-1" style="color:@accentColor;"></i>Anketi yayınlayan birim <span class="text-danger">*</span></label>
+                        <select name="CreatedByBirim" id="createdByBirim" class="form-select">
+                            @if (Model.AuthorizedUnits != null && Model.AuthorizedUnits.Any())
+                            {
+                                foreach (var birim in Model.AuthorizedUnits)
+                                {
+                                    <option value="@birim" selected="@(Model.SelectedBirim == birim ? "selected" : null)">@birim</option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="MERKEZ">MERKEZ (tüm birimler)</option>
+                            }
+                        </select>
+                        <input type="hidden" name="UnitId" value="" />
+                        <input type="hidden" name="UnitName" value="" />
+                        <small class="text-muted">Anket bu birim adına yayınlanır.</small>
+                    </div>
+                }
             </div>
         </div>
     </div>
 
     <!-- SORULAR -->
     <div class="card border-0 shadow-sm mb-3" id="questionsCard">
-        <div class="card-header py-3" style="background: linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);">
+        <div class="card-header py-3 cs-card-header-secondary">
             <h5 class="mb-0 text-white"><i class="bi bi-question-circle me-2"></i>Sorular</h5>
         </div>
         <div class="card-body" id="questionsContainer">
@@ -113,7 +257,14 @@
 
     <div class="d-grid mb-5">
         <button type="submit" class="btn btn-su btn-lg">
-            <i class="bi bi-check-circle me-1"></i>Anketi Oluştur
+            @if (isEdit)
+            {
+                <text><i class="bi bi-check-circle me-1"></i>Değişiklikleri Kaydet</text>
+            }
+            else
+            {
+                <text><i class="bi bi-check-circle me-1"></i>Anketi Oluştur</text>
+            }
         </button>
     </div>
 </form>
@@ -124,15 +275,23 @@
     <style>
         .select2-container--bootstrap-5 .select2-selection { border-radius: 0.375rem; }
 
+        /* ── Soru kartları ── */
         .question-card .card-header {
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-            border-bottom: 2px solid #bae6fd;
+            @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+            {
+                @:background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+                @:border-bottom: 2px solid #c4b5fd;
+            }
+            else
+            {
+                @:background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+                @:border-bottom: 2px solid #bfdbfe;
+            }
         }
         .question-card {
-            border: 1px solid #bae6fd !important;
             transition: box-shadow .2s;
         }
-        .question-card:hover { box-shadow: 0 4px 14px rgba(14,165,233,.15) !important; }
+        .question-card:hover { box-shadow: 0 4px 14px rgba(37,99,235,.12) !important; }
 
         .options-area {
             background: #f8fafc;
@@ -140,13 +299,32 @@
             padding: 1rem;
             border: 1px dashed #94a3b8;
         }
-        #btnAddQuestion {
-            border-style: dashed;
-            font-weight: 600;
-            letter-spacing: .02em;
+
+        @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+        {
+            @:#btnAddQuestion { border-style:dashed;font-weight:600;letter-spacing:.02em;color:#7c3aed;border-color:#7c3aed; }
+            @:#btnAddQuestion:hover { background:#f5f3ff;color:#7c3aed; }
+            @:.question-card { border-color: #c4b5fd !important; }
         }
-        #btnAddQuestion:hover {
-            background: #eff6ff;
+        else
+        {
+            @:#btnAddQuestion { border-style:dashed;font-weight:600;letter-spacing:.02em;color:#2563eb;border-color:#2563eb; }
+            @:#btnAddQuestion:hover { background:#eff6ff;color:#2563eb; }
+            @:.question-card { border-color: #bfdbfe !important; }
+        }
+
+        @if (string.Equals(formController, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
+        {
+            @:/* ── SuperAdmin renk teması (mor) ── */
+            @:.cs-card-header-primary { background: linear-gradient(135deg,#7c3aed 0%,#6d28d9 100%); }
+            @:.cs-card-header-secondary { background: linear-gradient(135deg,#9333ea 0%,#7c3aed 100%); }
+            @:.btn-outline-primary { color: #7c3aed !important; border-color: #7c3aed !important; }
+            @:.btn-outline-primary:hover { background: #7c3aed !important; border-color: #7c3aed !important; color: #fff !important; }
+        }
+        else
+        {
+            @:.cs-card-header-primary { background: linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%); }
+            @:.cs-card-header-secondary { background: linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%); }
         }
     </style>
 }
@@ -154,19 +332,173 @@
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
+        var isEditMode = @(isEdit ? "true" : "false");
+        var preselectedFaculties = @Html.Raw(preselectedFacJson);
+        var existingQuestions = @Html.Raw(existingQuestionsPayload);
+
         $(document).ready(function() {
             $('.select2').select2({
                 theme: 'bootstrap-5',
                 placeholder: 'Fakülte seçiniz...',
                 allowClear: true
             });
+
+            var ALL_UNITS_TOKEN = '__ALL__';
+
+            function syncSuperAdminUnitHidden() {
+                var sel = $('#superAdminUnitSelect').val() || [];
+                if (sel.length === 0) {
+                    $('#hiddenCreatedByBirim').val('');
+                    $('#hiddenUnitId').val('');
+                    $('#hiddenUnitName').val('');
+                    return;
+                }
+                if (sel.length === 1 && sel[0] === ALL_UNITS_TOKEN) {
+                    $('#hiddenCreatedByBirim').val('MERKEZ');
+                    $('#hiddenUnitId').val('');
+                    $('#hiddenUnitName').val('');
+                    return;
+                }
+                if (sel.length === 1) {
+                    var name = sel[0];
+                    $('#hiddenCreatedByBirim').val(name);
+                    $('#hiddenUnitName').val(name);
+                    var $opt = $('#superAdminUnitSelect option').filter(function () { return $(this).val() === name; }).first();
+                    $('#hiddenUnitId').val($opt.data('unit-id') || '');
+                } else {
+                    $('#hiddenCreatedByBirim').val('MERKEZ');
+                    $('#hiddenUnitId').val('');
+                    $('#hiddenUnitName').val('');
+                }
+            }
+
+            function syncAdminMultiHidden() {
+                var sel = $('#adminMultiUnitSelect').val() || [];
+                if (sel.length === 0) {
+                    $('#hiddenAdminCreatedByBirim').val('');
+                    return;
+                }
+                if (sel.length === 1 && sel[0] === ALL_UNITS_TOKEN) {
+                    $('#hiddenAdminCreatedByBirim').val('MERKEZ');
+                    return;
+                }
+                if (sel.length === 1) {
+                    $('#hiddenAdminCreatedByBirim').val(sel[0]);
+                } else {
+                    $('#hiddenAdminCreatedByBirim').val('MERKEZ');
+                }
+            }
+
+            if ($('#superAdminUnitSelect').length) {
+                $('#superAdminUnitSelect').select2({
+                    theme: 'bootstrap-5',
+                    placeholder: 'Birim seçin (birden fazla olabilir)…',
+                    allowClear: true,
+                    width: '100%'
+                }).on('change', syncSuperAdminUnitHidden)
+                  .on('select2:select', function (e) {
+                      var id = e.params.data.id;
+                      if (id === ALL_UNITS_TOKEN) {
+                          $(this).val([ALL_UNITS_TOKEN]).trigger('change');
+                      } else {
+                          var cur = ($(this).val() || []).filter(function (x) { return x !== ALL_UNITS_TOKEN; });
+                          $(this).val(cur).trigger('change');
+                      }
+                  });
+
+                $('#btnSelectAllUnits').on('click', function () {
+                    $('#superAdminUnitSelect').val([ALL_UNITS_TOKEN]).trigger('change');
+                });
+                $('#btnClearUnits').on('click', function () {
+                    $('#superAdminUnitSelect').val(null).trigger('change');
+                });
+
+                if (preselectedFaculties && preselectedFaculties.length > 0) {
+                    $('#superAdminUnitSelect').val(preselectedFaculties).trigger('change');
+                    syncSuperAdminUnitHidden();
+                }
+            }
+
+            if ($('#adminMultiUnitSelect').length) {
+                $('#adminMultiUnitSelect').select2({
+                    theme: 'bootstrap-5',
+                    placeholder: 'Yetkili birimlerinizden seçin…',
+                    allowClear: true,
+                    width: '100%'
+                }).on('change', syncAdminMultiHidden)
+                  .on('select2:select', function (e) {
+                      var id = e.params.data.id;
+                      if (id === ALL_UNITS_TOKEN) {
+                          $(this).val([ALL_UNITS_TOKEN]).trigger('change');
+                      } else {
+                          var cur = ($(this).val() || []).filter(function (x) { return x !== ALL_UNITS_TOKEN; });
+                          $(this).val(cur).trigger('change');
+                      }
+                  });
+
+                $('#btnAdminSelectAllUnits').on('click', function () {
+                    $('#adminMultiUnitSelect').val([ALL_UNITS_TOKEN]).trigger('change');
+                });
+                $('#btnAdminClearUnits').on('click', function () {
+                    $('#adminMultiUnitSelect').val(null).trigger('change');
+                });
+
+                if (preselectedFaculties && preselectedFaculties.length > 0) {
+                    $('#adminMultiUnitSelect').val(preselectedFaculties).trigger('change');
+                    syncAdminMultiHidden();
+                }
+            }
+
+            $('#createSurveyForm').on('submit', function (e) {
+                if ($('#superAdminUnitSelect').length) {
+                    var sel = $('#superAdminUnitSelect').val() || [];
+                    if (sel.length === 0) {
+                        e.preventDefault();
+                        alert('En az bir hedef birim seçmelisiniz.');
+                        return false;
+                    }
+                    syncSuperAdminUnitHidden();
+                }
+                if ($('#adminMultiUnitSelect').length) {
+                    var sel2 = $('#adminMultiUnitSelect').val() || [];
+                    if (sel2.length === 0) {
+                        e.preventDefault();
+                        alert('En az bir hedef birim seçmelisiniz.');
+                        return false;
+                    }
+                    syncAdminMultiHidden();
+                }
+            });
+
+            if (isEditMode && existingQuestions && existingQuestions.length > 0) {
+                var noQ = document.getElementById('noQuestions');
+                if (noQ) noQ.remove();
+                for (var i = 0; i < existingQuestions.length; i++) {
+                    var q = existingQuestions[i];
+                    addQuestion(q.text, q.type, q.isRequired, q.options, true);
+                }
+            }
         });
 
         let qIndex = 0;
+        var optCounters = {};
 
-        function addQuestion() {
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function addQuestion(text, type, isRequired, options, skipScroll) {
+            text = text || '';
+            type = type || 1;
+            isRequired = (isRequired !== undefined) ? isRequired : true;
+            options = options || [];
+            skipScroll = !!skipScroll;
+
             var noQ = document.getElementById('noQuestions');
             if (noQ) noQ.remove();
+
+            var checkedAttr = isRequired ? 'checked' : '';
 
             var html =
                 '<div class="card mb-3 question-card shadow-sm" data-index="' + qIndex + '">' +
@@ -181,25 +513,25 @@
                   '<div class="card-body">' +
                     '<div class="row g-3">' +
                       '<div class="col-md-8">' +
-                        '<input type="text" name="Questions[' + qIndex + '].Text" class="form-control" placeholder="Soruyu yazınız..." required />' +
+                        '<input type="text" name="Questions[' + qIndex + '].Text" class="form-control" placeholder="Soruyu yazınız..." value="' + escapeHtml(text) + '" required />' +
                       '</div>' +
                       '<div class="col-md-4">' +
                         '<select name="Questions[' + qIndex + '].Type" class="form-select" onchange="onTypeChange(this,' + qIndex + ')">' +
-                          '<option value="1">Likert (5\'li Ölçek)</option>' +
-                          '<option value="2">Çoktan Seçmeli</option>' +
-                          '<option value="3">Açık Uçlu</option>' +
+                          '<option value="1"' + (type == 1 ? ' selected' : '') + '>Likert (5\'li Ölçek)</option>' +
+                          '<option value="2"' + (type == 2 ? ' selected' : '') + '>Çoktan Seçmeli</option>' +
+                          '<option value="3"' + (type == 3 ? ' selected' : '') + '>Açık Uçlu</option>' +
                         '</select>' +
                       '</div>' +
                       '<div class="col-12">' +
                         '<div class="form-check">' +
-                          '<input type="checkbox" name="Questions[' + qIndex + '].IsRequired" value="true" class="form-check-input" checked />' +
+                          '<input type="checkbox" name="Questions[' + qIndex + '].IsRequired" value="true" class="form-check-input" ' + checkedAttr + ' />' +
                           '<input type="hidden" name="Questions[' + qIndex + '].IsRequired" value="false" />' +
                           '<label class="form-check-label">Zorunlu soru</label>' +
                         '</div>' +
                       '</div>' +
                       '<input type="hidden" name="Questions[' + qIndex + '].OrderIndex" value="' + qIndex + '" />' +
                     '</div>' +
-                    '<div class="mt-3 options-area" id="opts_' + qIndex + '" style="display:none;">' +
+                    '<div class="mt-3 options-area" id="opts_' + qIndex + '" style="display:' + (type == 2 ? 'block' : 'none') + ';">' +
                       '<label class="form-label fw-semibold small">Seçenekler</label>' +
                       '<div class="options-list"></div>' +
                       '<button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addOption(' + qIndex + ')">' +
@@ -210,12 +542,21 @@
                 '</div>';
 
             document.getElementById('questionsContainer').insertAdjacentHTML('beforeend', html);
+
+            if (type == 2 && options.length > 0) {
+                if (!optCounters[qIndex]) optCounters[qIndex] = 0;
+                for (var k = 0; k < options.length; k++) {
+                    addOption(qIndex, options[k].text);
+                }
+            }
+
             qIndex++;
 
-            // Soru eklendikten sonra yeni soruya scroll
-            var cards = document.querySelectorAll('.question-card');
-            if (cards.length > 0) {
-                cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (!skipScroll) {
+                var cards = document.querySelectorAll('.question-card');
+                if (cards.length > 0) {
+                    cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             }
         }
 
@@ -238,14 +579,14 @@
             area.style.display = (select.value === '2') ? 'block' : 'none';
         }
 
-        var optCounters = {};
-        function addOption(qi) {
+        function addOption(qi, optText) {
             if (!optCounters[qi]) optCounters[qi] = 0;
             var oi = optCounters[qi];
+            optText = optText || '';
             var html =
                 '<div class="input-group mb-2">' +
                   '<span class="input-group-text text-muted small">' + (oi + 1) + '</span>' +
-                  '<input type="text" name="Questions[' + qi + '].Options[' + oi + '].Text" class="form-control" placeholder="Seçenek ' + (oi + 1) + '" required />' +
+                  '<input type="text" name="Questions[' + qi + '].Options[' + oi + '].Text" class="form-control" placeholder="Seçenek ' + (oi + 1) + '" value="' + escapeHtml(optText) + '" required />' +
                   '<input type="hidden" name="Questions[' + qi + '].Options[' + oi + '].OrderIndex" value="' + oi + '" />' +
                   '<button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button>' +
                 '</div>';
@@ -253,20 +594,23 @@
             optCounters[qi]++;
         }
 
-        // Tarih kısıtlamaları
+        // Tarih kısıtlamaları (düzenlemede geçmiş tarihli anketlere izin ver)
         var today = new Date().toISOString().split('T')[0];
         var startInput = document.getElementById('startDate');
         var endInput   = document.getElementById('endDate');
 
-        startInput.min = today;
+        if (!isEditMode) {
+            startInput.min = today;
+        }
 
         startInput.addEventListener('change', function () {
-            endInput.min = this.value || today;
+            var baseMin = isEditMode ? '' : today;
+            endInput.min = this.value || baseMin || today;
             if (endInput.value && endInput.value < this.value) {
                 endInput.value = '';
             }
         });
 
-        endInput.min = startInput.value || today;
+        endInput.min = startInput.value || (isEditMode ? '' : today);
     </script>
 }

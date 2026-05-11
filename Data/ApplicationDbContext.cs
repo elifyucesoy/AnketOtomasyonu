@@ -15,6 +15,7 @@ namespace AnketOtomasyonu.Data
         public DbSet<SurveyAnswer> SurveyAnswers { get; set; }
         public DbSet<AdminPermission> AdminPermissions { get; set; }
         public DbSet<SurveyBirim> SurveyBirimler { get; set; }
+        public DbSet<CachedUnit> CachedUnits { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -38,6 +39,7 @@ namespace AnketOtomasyonu.Data
                 entity.Property(e => e.TargetRoles).HasMaxLength(500);
                 entity.Property(e => e.CreatedByName).HasMaxLength(200);
                 entity.Property(e => e.CreatedByBirim).HasMaxLength(300);
+                entity.Property(e => e.UnitName).HasMaxLength(300);
 
                 entity.HasMany(s => s.Questions)
                       .WithOne(q => q.Survey)
@@ -61,6 +63,16 @@ namespace AnketOtomasyonu.Data
                 entity.HasIndex(e => new { e.SurveyId, e.Birim }).IsUnique();
             });
 
+            modelBuilder.Entity<CachedUnit>(entity =>
+            {
+                // PK = API'den gelen birim Id'si (identity değil)
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedNever();
+                entity.Property(e => e.Name).HasMaxLength(300).IsRequired();
+                entity.Property(e => e.UnitTypeName).HasMaxLength(200);
+                entity.ToTable("CachedUnits");
+            });
+
             modelBuilder.Entity<Question>(entity =>
             {
                 entity.HasKey(e => e.Id);
@@ -82,11 +94,12 @@ namespace AnketOtomasyonu.Data
             {
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => new { e.SurveyId, e.UserId }).IsUnique();
-                entity.Property(e => e.UserId).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.UserId).HasMaxLength(128).IsRequired();
                 entity.Property(e => e.IpAddress).HasMaxLength(45);
                 entity.Property(e => e.UserFullName).HasMaxLength(200);
                 entity.Property(e => e.FakulteAdi).HasMaxLength(300);
                 entity.Property(e => e.BolumAdi).HasMaxLength(300);
+                entity.Property(e => e.BirimAdi).HasMaxLength(300);
 
                 entity.HasMany(r => r.Answers)
                       .WithOne(a => a.SurveyResponse)

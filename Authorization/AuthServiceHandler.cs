@@ -244,17 +244,6 @@ namespace AnketOtomasyonu.Authorization
                     ? requirement.PermissionCode.All(code => context.User.HasClaim(AnketPermissions.ClaimType, code))
                     : requirement.PermissionCode.Any(code => context.User.HasClaim(AnketPermissions.ClaimType, code));
 
-                // AdminController policy (ANKET_API_ADMIN): OR [Admin, SuperAdmin]. Eski oturumlarda yalnızca
-                // ClaimTypes.Role olabilir; izin claim'i eksikse yine de yönetim paneline izin ver.
-                if (!claimSatisfied
-                    && requirement.Operation == Operations.Or
-                    && requirement.PermissionCode.Contains(AnketPermissions.Admin)
-                    && requirement.PermissionCode.Contains(AnketPermissions.SuperAdmin))
-                {
-                    if (context.User.IsInRole("SuperAdmin") || context.User.IsInRole("Admin"))
-                        claimSatisfied = true;
-                }
-
                 if (claimSatisfied)
                 {
                     context.Succeed(requirement);

@@ -5,6 +5,8 @@
         public int Id { get; set; }
         public int SurveyResponseId { get; set; }
         public int QuestionId { get; set; }
+        /// <summary>Gönderim anındaki soru tipi (Likert / çoktan seçmeli / açık uçlu). Soru sonra değişse bile rapor tutarlı kalır.</summary>
+        public QuestionType? QuestionType { get; set; }
         public int? SelectedOptionId { get; set; }
         public string? OpenEndedAnswer { get; set; }
 

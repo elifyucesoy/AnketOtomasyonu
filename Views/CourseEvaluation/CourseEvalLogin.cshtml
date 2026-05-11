@@ -1,0 +1,168 @@
+@model AnketOtomasyonu.Models.ViewModels.CourseEvalLoginViewModel
+@{
+    ViewData["Title"] = "Öğrenci Girişi — " + Model.SurveyTitle;
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <style>
+        :root { --su-navy: #1B2A4A; --su-yellow: #F9BC00; }
+
+        body {
+            background: linear-gradient(135deg, var(--su-navy) 0%, #2c4a7c 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .login-card {
+            width: 90%;
+            max-width: 440px;
+            margin: auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 12px 40px rgba(0,0,0,.3);
+            padding: 2.5rem 2rem;
+        }
+
+        .su-logo-wrap {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .su-logo-icon {
+            width: 72px; height: 72px;
+            background: var(--su-yellow);
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            color: var(--su-navy);
+        }
+
+        .survey-title {
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--su-navy);
+            margin-bottom: 0.25rem;
+        }
+
+        .survey-sub {
+            text-align: center;
+            font-size: 0.78rem;
+            color: #6c757d;
+            margin-bottom: 1.5rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .form-label { font-size: 0.85rem; font-weight: 600; color: #444; }
+
+        .form-control {
+            border-radius: 8px;
+            padding: 11px 14px;
+            border: 1.5px solid #dde1e3;
+            font-size: 1rem;
+            transition: border-color .2s, box-shadow .2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--su-navy);
+            box-shadow: 0 0 0 3px rgba(27,42,74,.15);
+        }
+
+        .btn-login {
+            background: var(--su-navy);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            width: 100%;
+            transition: background .2s, transform .15s;
+        }
+
+        .btn-login:hover { background: #142038; transform: translateY(-1px); }
+        .btn-login:disabled { background: #8a9ab5; }
+
+        footer {
+            text-align: center;
+            padding: 14px;
+            color: rgba(255,255,255,.5);
+            font-size: 0.78rem;
+        }
+
+        @@media (max-width: 480px) {
+            .login-card { padding: 2rem 1.25rem; }
+            .su-logo-icon { width: 60px; height: 60px; font-size: 1.8rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="su-logo-wrap">
+            <div class="su-logo-icon">🎓</div>
+        </div>
+        <p class="survey-title">@Model.SurveyTitle</p>
+        <p class="survey-sub">Selçuk Üniversitesi</p>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show py-2 mb-3" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>@TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        <form method="post" id="loginForm" asp-action="CourseEvalLogin" asp-controller="CourseEvaluation" asp-route-id="@Model.SurveyId">
+            @Html.AntiForgeryToken()
+
+            <div class="mb-3">
+                <label asp-for="OgrNo" class="form-label">Öğrenci Numarası</label>
+                <input asp-for="OgrNo"
+                       class="form-control"
+                       inputmode="numeric"
+                       autocomplete="username"
+                       placeholder="Öğrenci numaranızı giriniz">
+                <span asp-validation-for="OgrNo" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="Parola" class="form-label">OBS Şifresi</label>
+                <input asp-for="Parola"
+                       type="password"
+                       class="form-control"
+                       autocomplete="current-password"
+                       placeholder="OBS/OBIS şifrenizi giriniz">
+                <span asp-validation-for="Parola" class="text-danger small"></span>
+            </div>
+
+            <button type="submit" class="btn-login" id="loginBtn">
+                <span id="btnText">Giriş Yap &amp; Derslerimi Getir</span>
+                <span id="btnSpinner" class="spinner-border spinner-border-sm ms-2" style="display:none;"></span>
+            </button>
+        </form>
+    </div>
+
+    <footer>© Selçuk Üniversitesi Rektörlük</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function () {
+            var btn = document.getElementById('loginBtn');
+            document.getElementById('btnText').textContent = 'Giriş yapılıyor…';
+            document.getElementById('btnSpinner').style.display = 'inline-block';
+            btn.disabled = true;
+        });
+    </script>
+</body>
+</html>

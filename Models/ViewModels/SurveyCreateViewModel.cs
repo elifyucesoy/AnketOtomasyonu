@@ -10,10 +10,17 @@ namespace AnketOtomasyonu.Models.ViewModels
         [Display(Name = "Anket Başlığı")]
         public string Title { get; set; } = string.Empty;
 
+        /// <summary>Anket tipi: Normal veya CourseEvaluation (Ders Değerlendirme — OBIS akışı)</summary>
+        [Display(Name = "Anket Tipi")]
+        public SurveyType SurveyType { get; set; } = SurveyType.Normal;
+
         [StringLength(1000)]
         [Display(Name = "Açıklama")]
         public string Description { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Checkbox etiketleri; kullanıcıya uzaktan atanmış ANKET kodlarının (5 taneden alt küme) her biri ilgili etiketle eşlenir, çoklu izinde VEYA mantığı.
+        /// </summary>
         [Display(Name = "Hedef Roller")]
         public List<string> TargetRoles { get; set; } = new();
 
@@ -41,8 +48,14 @@ namespace AnketOtomasyonu.Models.ViewModels
 
         public List<QuestionCreateViewModel> Questions { get; set; } = new();
 
-        /// <summary>Mevcut roller (checkbox listesi için) — API'deki UserType değerlerine karşılık gelir</summary>
-        public List<string> AvailableRoles { get; set; } = new() { "Employee", "Student" };
+        /// <summary>
+        /// Checkbox listesi; personel hedefi uzak sistemde <c>ANKET_IDARI</c> ile eşlenir.
+        /// Veritabanında kalan <c>Idari</c> / <c>Employee</c> metinleri kodda yine <c>ANKET_IDARI</c> ile tanınır.
+        /// </summary>
+        public List<string> AvailableRoles { get; set; } = new()
+        {
+            "Personel", "Student", "Akademik", "Admin", "SuperAdmin"
+        };
     }
 
     public class QuestionCreateViewModel

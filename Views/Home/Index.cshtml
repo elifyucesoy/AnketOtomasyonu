@@ -21,17 +21,22 @@
     }
 
     .su-hero-icon {
-        width: 90px;
-        height: 90px;
-        background: var(--su-yellow);
-        border-radius: 18px;
+        width: 110px;
+        height: 110px;
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         margin: 0 auto 28px;
-        font-size: 46px;
-        color: #1B2A4A;
         box-shadow: 0 6px 24px rgba(249,188,0,.35);
+        overflow: hidden;
+        background: transparent;
+    }
+
+    .su-hero-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
     }
 
     .su-hero h1 {
@@ -54,10 +59,10 @@
 
     .survey-card {
         background: #fff;
-        border-radius: 20px;
-        padding: 38px 22px 28px;
+        border-radius: 16px;
+        padding: 22px 18px 18px;
         text-align: center;
-        box-shadow: 0 8px 30px rgba(0,0,0,.20);
+        box-shadow: 0 4px 18px rgba(0,0,0,.16);
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -66,27 +71,27 @@
 
     .survey-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 16px 40px rgba(0,0,0,.28);
+        box-shadow: 0 12px 32px rgba(0,0,0,.22);
     }
 
     .survey-card-icon {
-        width: 76px;
-        height: 76px;
+        width: 60px;
+        height: 60px;
         background: var(--su-yellow);
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin: 0 auto 20px;
-        font-size: 34px;
+        margin: 0 auto 14px;
+        font-size: 26px;
         color: #1B2A4A;
     }
 
     .survey-card-title {
-        font-size: 1.05rem;
+        font-size: 0.98rem;
         font-weight: 700;
         color: #1B2A4A;
-        margin-bottom: 10px;
+        margin-bottom: 6px;
         line-height: 1.35;
         word-break: break-word;
         overflow-wrap: break-word;
@@ -94,17 +99,21 @@
     }
 
     .survey-card-desc {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         color: #888;
-        flex-grow: 1;
-        margin-bottom: 22px;
-        line-height: 1.55;
+        margin-bottom: 10px;
+        line-height: 1.5;
+        /* Açıklama varsa max 2 satır göster */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
 
     .survey-card-meta {
         font-size: 0.75rem;
         color: #aaa;
-        margin-bottom: 14px;
+        margin-bottom: 10px;
     }
 
     /* ── Ankete Başla butonu ── */
@@ -161,7 +170,7 @@
 <!-- ── HERO ── -->
 <div class="su-hero">
     <div class="su-hero-icon">
-        <i class="bi bi-mortarboard-fill"></i>
+        <img src="~/images/selcuk_logo.png" alt="Selçuk Üniversitesi" />
     </div>
     <h1>Selçuk Üniversitesi</h1>
     <p class="su-hero-sub">Anket Formları</p>
@@ -229,10 +238,6 @@ else
                         {
                             <div class="survey-card-desc">@survey.Description</div>
                         }
-                        else
-                        {
-                            <div class="survey-card-desc">&nbsp;</div>
-                        }
 
                         <div class="login-badge">
                             @if (survey.IsAnonymous)
@@ -247,25 +252,58 @@ else
                             }
                         </div>
 
-                        <div class="mb-2">
-                            <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
-                                <i class="bi bi-building me-1"></i>@survey.CreatedByBirim
-                            </span>
-                        </div>
+                        @if (survey.TargetUnits.Count > 0)
+                        {
+                            <div class="w-100 mb-2 px-1">
+                                <div class="small fw-semibold text-muted mb-1" style="font-size:0.7rem;">
+                                    <i class="bi bi-bullseye me-1"></i>Hedef birimler
+                                </div>
+                                <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                    @if (survey.TargetUnits.Count >= 20)
+                                    {
+                                        <span class="badge rounded-pill bg-white text-dark border shadow-sm" style="font-size:0.62rem;">Tüm birimler</span>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var u in survey.TargetUnits.Take(3))
+                                        {
+                                            <span class="badge rounded-pill bg-white text-dark border shadow-sm" style="font-size:0.62rem;max-width:100%;text-overflow:ellipsis;overflow:hidden;">@u</span>
+                                        }
+                                        @if (survey.TargetUnits.Count > 3)
+                                        {
+                                            <span class="small text-muted align-self-center" style="font-size:0.65rem;">+@(survey.TargetUnits.Count - 3)</span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
 
                         @if (survey.Status == "Aktif")
                         {
-                            <a asp-controller="SurveyResponse"
-                               asp-action="Fill"
-                               asp-route-id="@survey.Id"
-                               class="btn-ankete mb-2">
-                                Ankete Başla &rarr;
-                            </a>
+                            @* Ders Değerlendirme (SurveyType=CourseEvaluation) → OBIS kimlik doğrulama akışı *@
+                            @if (survey.SurveyType == AnketOtomasyonu.Models.Entities.SurveyType.CourseEvaluation)
+                            {
+                                <a asp-controller="CourseEvaluation"
+                                   asp-action="CourseEvalLogin"
+                                   asp-route-id="@survey.Id"
+                                   class="btn-ankete mb-2">
+                                    Ankete Katıl &rarr;
+                                </a>
+                            }
+                            else
+                            {
+                                <a asp-controller="SurveyResponse"
+                                   asp-action="Fill"
+                                   asp-route-id="@survey.Id"
+                                   class="btn-ankete mb-2">
+                                    Ankete Başla &rarr;
+                                </a>
+                            }
                         }
                         
-                        @if (Model.UserRole == "Admin" || Model.UserRole == "SuperAdmin")
+                        @if (Model.CanUseStaffSurveyTools)
                         {
-                            var controller = Model.UserRole == "SuperAdmin" ? "SuperAdmin" : "Admin";
+                            var controller = Model.PreferSuperAdminSurveyLinks ? "SuperAdmin" : "Admin";
                             <a asp-controller="@controller" asp-action="PreviewSurvey" asp-route-id="@survey.Id" class="btn btn-sm btn-outline-info w-100 mb-1">
                                 <i class="bi bi-eye"></i> Anketi Önizle
                             </a>
@@ -274,7 +312,7 @@ else
                         @if (survey.Status == "Taslak")
                         {
                             <span class="badge bg-warning text-dark mb-2">Taslak (Yayında Değil)</span>
-                            @if (Model.UserRole == "Admin" || Model.UserRole == "SuperAdmin")
+                            @if (Model.CanUseStaffSurveyTools)
                             {
                                 <a asp-controller="Admin" asp-action="EditSurvey" asp-route-id="@survey.Id" class="btn btn-sm btn-outline-secondary w-100">
                                     Düzenle

@@ -49,10 +49,9 @@ namespace AnketOtomasyonu.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Username", "PersonelBirim")
-                        .IsUnique();
+                    b.HasIndex("Username", "PersonelBirim");
 
-                    b.ToTable("AdminPermissions");
+                    b.ToTable("AdminPermissions", (string)null);
                 });
 
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.Question", b =>
@@ -84,7 +83,7 @@ namespace AnketOtomasyonu.Migrations
 
                     b.HasIndex("SurveyId");
 
-                    b.ToTable("Questions");
+                    b.ToTable("Questions", (string)null);
                 });
 
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.QuestionOption", b =>
@@ -113,7 +112,7 @@ namespace AnketOtomasyonu.Migrations
 
                     b.HasIndex("QuestionId");
 
-                    b.ToTable("QuestionOptions");
+                    b.ToTable("QuestionOptions", (string)null);
                 });
 
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.Survey", b =>
@@ -187,7 +186,7 @@ namespace AnketOtomasyonu.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Surveys");
+                    b.ToTable("Surveys", (string)null);
                 });
 
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.SurveyAnswer", b =>
@@ -205,6 +204,9 @@ namespace AnketOtomasyonu.Migrations
                     b.Property<int>("QuestionId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("QuestionType")
+                        .HasColumnType("int");
+
                     b.Property<int?>("SelectedOptionId")
                         .HasColumnType("int");
 
@@ -219,7 +221,33 @@ namespace AnketOtomasyonu.Migrations
 
                     b.HasIndex("SurveyResponseId");
 
-                    b.ToTable("SurveyAnswers");
+                    b.ToTable("SurveyAnswers", (string)null);
+                });
+
+            modelBuilder.Entity("AnketOtomasyonu.Models.Entities.SurveyBirim", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Birim")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("SurveyId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UnitId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SurveyId");
+
+                    b.ToTable("SurveyBirimler", (string)null);
                 });
 
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.SurveyResponse", b =>
@@ -254,15 +282,15 @@ namespace AnketOtomasyonu.Migrations
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SurveyId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("SurveyResponses");
+                    b.ToTable("SurveyResponses", (string)null);
                 });
 
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.Question", b =>
@@ -313,6 +341,17 @@ namespace AnketOtomasyonu.Migrations
                     b.Navigation("SurveyResponse");
                 });
 
+            modelBuilder.Entity("AnketOtomasyonu.Models.Entities.SurveyBirim", b =>
+                {
+                    b.HasOne("AnketOtomasyonu.Models.Entities.Survey", "Survey")
+                        .WithMany("TargetUnits")
+                        .HasForeignKey("SurveyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Survey");
+                });
+
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.SurveyResponse", b =>
                 {
                     b.HasOne("AnketOtomasyonu.Models.Entities.Survey", "Survey")
@@ -334,6 +373,8 @@ namespace AnketOtomasyonu.Migrations
                     b.Navigation("Questions");
 
                     b.Navigation("Responses");
+
+                    b.Navigation("TargetUnits");
                 });
 
             modelBuilder.Entity("AnketOtomasyonu.Models.Entities.SurveyResponse", b =>

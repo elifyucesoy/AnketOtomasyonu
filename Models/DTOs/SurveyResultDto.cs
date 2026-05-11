@@ -11,6 +11,21 @@ namespace AnketOtomasyonu.Models.DTOs
         public List<QuestionResultDto> Questions { get; set; } = new();
         public List<DepartmentResultDto> DepartmentResults { get; set; } = new();
         public List<FakulteResultDto> FakulteResults { get; set; } = new();
+        public List<BirimResultDto> BirimResults { get; set; } = new();
+    }
+
+    /// <summary>Anket sonuç filtreleri (dropdown): tek SELECT, ağır Include yok.</summary>
+    public class RespondentFilterOptionsDto
+    {
+        public List<string> Bolumler { get; set; } = new();
+        public List<string> Birimler { get; set; } = new();
+    }
+
+    public class BirimResultDto
+    {
+        public string? BirimName { get; set; }
+        public int ResponseCount { get; set; }
+        public double AverageSatisfaction { get; set; }
     }
 
     public class FakulteResultDto
@@ -31,7 +46,13 @@ namespace AnketOtomasyonu.Models.DTOs
     {
         public string? UserFullName { get; set; }
         public string? FakulteAdi { get; set; }
+        /// <summary>UnitList/CachedUnits ile eşleşen birim adı.</summary>
+        public string? BirimAdi { get; set; }
         public string? BolumAdi { get; set; }
+        /// <summary>GetProfile / UnitList — kayıtlı birim API Id (katılımcı).</summary>
+        public int? RespondentUnitId { get; set; }
+        /// <summary>UnitList parentId (üst birim referansı).</summary>
+        public int? ParentUnitId { get; set; }
         public DateTime SubmittedAt { get; set; }
     }
 

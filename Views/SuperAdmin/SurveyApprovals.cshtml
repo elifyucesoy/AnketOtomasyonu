@@ -15,31 +15,28 @@
     </a>
 </div>
 
-<!-- FAKÜLTE FİLTRESİ -->
-@if (Model.AllBirimler.Any())
-{
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body py-3">
-            <form method="get" asp-action="SurveyApprovals" class="d-flex gap-2 align-items-center flex-wrap">
-                <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Fakülte Filtrele:</label>
-                <select name="birim" class="form-select form-select-sm" style="max-width:320px;"
-                        onchange="this.form.submit()">
-                    <option value="">— Tüm Fakülteler —</option>
-                    @foreach (var b in Model.AllBirimler)
-                    {
-                        <option value="@b" selected="@(Model.SelectedBirim == b ? "selected" : null)">@b</option>
-                    }
-                </select>
-                @if (!string.IsNullOrEmpty(Model.SelectedBirim))
+<!-- BİRİM FİLTRESİ (ilk seçenek: tüm birimler = birim parametresi boş) -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body py-3">
+        <form method="get" asp-action="SurveyApprovals" class="d-flex gap-2 align-items-center flex-wrap">
+            <label class="fw-semibold me-1 mb-0"><i class="bi bi-funnel me-1"></i>Birim:</label>
+            <select name="birim" class="form-select form-select-sm" style="max-width:320px;"
+                    onchange="this.form.submit()">
+                <option value="">Tüm birimler</option>
+                @foreach (var b in Model.AllBirimler)
                 {
-                    <a asp-action="SurveyApprovals" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-x-circle me-1"></i>Temizle
-                    </a>
+                    <option value="@b" selected="@(Model.SelectedBirim == b ? "selected" : null)">@b</option>
                 }
-            </form>
-        </div>
+            </select>
+            @if (!string.IsNullOrEmpty(Model.SelectedBirim))
+            {
+                <a asp-action="SurveyApprovals" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x-circle me-1"></i>Temizle
+                </a>
+            }
+        </form>
     </div>
-}
+</div>
 
 @if (!Model.Surveys.Any())
 {
@@ -86,32 +83,34 @@ else
                     </div>
                     <div class="col-md-5 mt-3 mt-md-0">
                         <!-- Onay Formu -->
-                        <div class="border rounded p-3 bg-light">
-                            <label class="form-label fw-semibold small text-muted mb-2">
+                        <div class="approval-box">
+                            <label class="approval-note-label">
                                 <i class="bi bi-chat-left-text me-1"></i>Not (isteğe bağlı)
                             </label>
-                            <input type="text" class="form-control form-control-sm mb-2"
+                            <input type="text" class="form-control form-control-sm mb-3"
                                    id="note-@s.Id" placeholder="Onay / ret notu ekleyebilirsiniz..." maxlength="200" />
-                                    <a asp-action="PreviewSurvey" asp-route-id="@s.Id" class="btn btn-outline-primary btn-sm w-100 mb-2">
-                                        <i class="bi bi-eye me-1"></i>Anketi Önizle
-                                    </a>
-                                    <div class="d-flex gap-2">
-                                        <form asp-action="ApproveSurvey" method="post" style="flex:1;"
-                                              onsubmit="setNote(this, @s.Id)">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="id" value="@s.Id" />
-                                            <input type="hidden" name="note" id="approve-note-@s.Id" />
-                                            <button type="submit" class="btn btn-success btn-sm w-100"
-                                                    onclick="return confirm('Bu anketi onaylayıp yayınlamak istediğinize emin misiniz?')">
-                                                <i class="bi bi-check-lg me-1"></i>Onayla
-                                            </button>
-                                        </form>
-                                        <form asp-action="RejectSurvey" method="post" style="flex:1;"
-                                              onsubmit="setNoteReject(this, @s.Id)">
+
+                            <a asp-action="PreviewSurvey" asp-route-id="@s.Id" class="btn btn-preview w-100 mb-3">
+                                <i class="bi bi-eye me-1"></i>Anketi Önizle
+                            </a>
+
+                            <div class="d-flex gap-2">
+                                <form asp-action="ApproveSurvey" method="post" style="flex:1;"
+                                      onsubmit="setNote(this, @s.Id)">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@s.Id" />
+                                    <input type="hidden" name="note" id="approve-note-@s.Id" />
+                                    <button type="submit" class="btn btn-approve w-100"
+                                            onclick="return confirm('Bu anketi onaylayıp yayınlamak istediğinize emin misiniz?')">
+                                        <i class="bi bi-check-lg me-1"></i>Onayla
+                                    </button>
+                                </form>
+                                <form asp-action="RejectSurvey" method="post" style="flex:1;"
+                                      onsubmit="setNoteReject(this, @s.Id)">
                                     @Html.AntiForgeryToken()
                                     <input type="hidden" name="id" value="@s.Id" />
                                     <input type="hidden" name="note" id="reject-note-@s.Id" />
-                                    <button type="submit" class="btn btn-danger btn-sm w-100"
+                                    <button type="submit" class="btn btn-reject w-100"
                                             onclick="return confirm('Bu anketi reddetmek istediğinize emin misiniz?')">
                                         <i class="bi bi-x-lg me-1"></i>Reddet
                                     </button>
@@ -123,6 +122,80 @@ else
             </div>
         </div>
     }
+}
+
+@section Styles {
+<style>
+    /* Onay kutusu */
+    .approval-box {
+        background: #fff;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 1.1rem 1.2rem 1rem;
+        box-shadow: 0 2px 10px rgba(124,58,237,.06);
+    }
+    .approval-note-label {
+        display: block;
+        font-size: .8rem;
+        font-weight: 600;
+        color: #64748b;
+        margin-bottom: .4rem;
+        letter-spacing: .01em;
+    }
+
+    /* Önizle butonu */
+    .btn-preview {
+        font-size: .82rem;
+        font-weight: 600;
+        padding: .42rem .9rem;
+        border-radius: 9px;
+        border: 1.5px solid #7c3aed;
+        color: #7c3aed;
+        background: transparent;
+        transition: background .18s, color .18s;
+    }
+    .btn-preview:hover {
+        background: #7c3aed;
+        color: #fff;
+    }
+
+    /* Onayla butonu */
+    .btn-approve {
+        font-size: .82rem;
+        font-weight: 700;
+        padding: .48rem .9rem;
+        border-radius: 9px;
+        border: none;
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        color: #fff;
+        box-shadow: 0 2px 8px rgba(5,150,105,.25);
+        transition: filter .18s, box-shadow .18s;
+        letter-spacing: .01em;
+    }
+    .btn-approve:hover {
+        filter: brightness(1.06);
+        box-shadow: 0 4px 14px rgba(5,150,105,.35);
+        color: #fff;
+    }
+
+    /* Reddet butonu */
+    .btn-reject {
+        font-size: .82rem;
+        font-weight: 700;
+        padding: .48rem .9rem;
+        border-radius: 9px;
+        border: 1.5px solid #dc2626;
+        background: transparent;
+        color: #dc2626;
+        transition: background .18s, color .18s, box-shadow .18s;
+        letter-spacing: .01em;
+    }
+    .btn-reject:hover {
+        background: #dc2626;
+        color: #fff;
+        box-shadow: 0 4px 14px rgba(220,38,38,.2);
+    }
+</style>
 }
 
 @section Scripts {
